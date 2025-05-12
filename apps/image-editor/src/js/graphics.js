@@ -139,6 +139,7 @@ class Graphics {
      */
     this._handler = {
       onMouseDown: this._onMouseDown.bind(this),
+      onMouseUp: this._onMouseUp.bind(this),
       onObjectAdded: this._onObjectAdded.bind(this),
       onObjectRemoved: this._onObjectRemoved.bind(this),
       onObjectMoved: this._onObjectMoved.bind(this),
@@ -548,6 +549,25 @@ class Graphics {
     cropper.changeVisibility(true);
 
     return dataUrl;
+  }
+
+  /**
+   * Export canvas content as SVG string
+   * @param {Object} [options] Options object
+   * @param {boolean} [options.suppressPreamble=false] If true xml tag is not included
+   * @param {boolean} [options.viewBox=false] If true, viewBox attribute is set to svg
+   * @param {string} [options.encoding='UTF-8'] Encoding of SVG output
+   * @param {Function} [options.reviver] Method for further parsing of svg elements
+   * @returns {string} SVG string
+   */
+  toSVG(options = {}) {
+    const cropper = this.getComponent(components.CROPPER);
+    cropper.changeVisibility(false);
+
+    const svg = this._canvas && this._canvas.toSVG(options);
+    cropper.changeVisibility(true);
+
+    return svg;
   }
 
   /**
@@ -1089,6 +1109,7 @@ class Graphics {
     const handler = this._handler;
     canvas.on({
       'mouse:down': handler.onMouseDown,
+      'mouse:up': handler.onMouseUp,
       'object:added': handler.onObjectAdded,
       'object:removed': handler.onObjectRemoved,
       'object:moving': handler.onObjectMoved,
@@ -1124,6 +1145,32 @@ class Graphics {
   }
 
   /**
+   * "mouse:up" canvas event handler
+   * @param {{target: fabric.Object, e: MouseEvent}} fEvent - Fabric event
+   * @private
+   */
+  _onMouseUp(fEvent) {
+    const { e: event, target } = fEvent;
+    const originPointer = this._canvas.getPointer(event);
+
+    if (target) {
+      // If snapping was in progress, finalize the position and clean up guides
+      if (this._snapGuides && this._snapGuides.length) {
+        this._removeSnapGuides();
+      }
+
+      // Reset stored positions used for snapping
+      target.set({
+        lastLeft: null,
+        lastTop: null,
+      });
+    }
+
+    // Fire mouse up event with pointer position
+    this.fire(events.MOUSE_UP, event, originPointer);
+  }
+
+  /**
    * "object:added" canvas event handler
    * @param {{target: fabric.Object, e: MouseEvent}} fEvent - Fabric event
    * @private
@@ -1154,6 +1201,37 @@ class Graphics {
    * @private
    */
   _onObjectMoved(fEvent) {
+    const obj = fEvent.target;
+    const { left: currentLeft, top: currentTop } = obj;
+
+    // Calculate movement delta
+    const dx = currentLeft - obj.get('lastLeft') || 0;
+    const dy = currentTop - obj.get('lastTop') || 0;
+
+    // Calculate snapping adjustments
+    this._removeSnapGuides();
+    const { dx: snapDX, dy: snapDY, guides } = this._calculateSnapping(obj, dx, dy);
+
+    // Apply snapping if necessary
+    if (dx !== snapDX || dy !== snapDY) {
+      obj.set({
+        left: obj.get('lastLeft') + snapDX,
+        top: obj.get('lastTop') + snapDY,
+      });
+      obj.setCoords();
+    }
+
+    // Store current position for next move
+    obj.set({
+      lastLeft: obj.left,
+      lastTop: obj.top,
+    });
+
+    // Show or hide snap guides
+    if (guides.length) {
+      this._showSnapGuides(guides);
+    }
+
     this._lazyFire(
       events.OBJECT_MOVED,
       (object) => this.createObjectProperties(object),
@@ -1531,6 +1609,150 @@ class Graphics {
     const resize = this.getComponent(components.RESIZE);
 
     return resize.resize(dimensions);
+  }
+
+  /**
+   * Calculate snapping points for object movement
+   * @param {fabric.Object} selected - Selected object
+   * @param {number} dx - X movement delta
+   * @param {number} dy - Y movement delta
+   * @returns {{dx: number, dy: number, guides: Array}} - Adjusted movement and guide lines
+   * @private
+   */
+  _calculateSnapping(selected, dx, dy) {
+    const SNAP_THRESHOLD = 5;
+    const zoom = this._canvas.getZoom();
+    const selectedBBox = selected.getBoundingRect();
+
+    // Helper to get all snap points for a bbox
+    const getSnapPoints = (bbox) => ({
+      vertical: [
+        bbox.left, // left
+        bbox.left + bbox.width / 2, // center
+        bbox.left + bbox.width, // right
+      ],
+      horizontal: [
+        bbox.top, // top
+        bbox.top + bbox.height / 2, // center
+        bbox.top + bbox.height, // bottom
+      ],
+    });
+
+    // Get snap points for the selected element (after move)
+    const selSnap = getSnapPoints({
+      left: selectedBBox.left + dx,
+      top: selectedBBox.top + dy,
+      width: selectedBBox.width,
+      height: selectedBBox.height,
+    });
+
+    // Gather all possible snap points from other elements
+    const allVertical = [];
+    const allHorizontal = [];
+    const canvasWidth = this._canvas.getWidth() / zoom;
+    const canvasHeight = this._canvas.getHeight() / zoom;
+
+    // Add canvas edges and center lines
+    allVertical.push(0, canvasWidth / 2, canvasWidth - 1);
+    allHorizontal.push(0, canvasHeight / 2, canvasHeight - 1);
+
+    // Add other objects' snap points
+    this._canvas.getObjects().forEach((obj) => {
+      if (obj !== selected && obj.type !== 'cropzone') {
+        const bbox = obj.getBoundingRect();
+        const pts = getSnapPoints(bbox);
+        allVertical.push(...pts.vertical);
+        allHorizontal.push(...pts.horizontal);
+      }
+    });
+
+    // Find closest snap for each axis
+    let minDiffX = SNAP_THRESHOLD;
+    let minDiffY = SNAP_THRESHOLD;
+    let snapDX = dx;
+    let snapDY = dy;
+    let guides = [];
+
+    selSnap.vertical.forEach((selX) => {
+      allVertical.forEach((guideX) => {
+        const diff = Math.abs(selX - guideX);
+        if (diff < minDiffX) {
+          minDiffX = diff;
+          snapDX = guideX - (selectedBBox.left + (selX - (selectedBBox.left + dx)));
+          guides = guides.filter((g) => g.type !== 'vertical');
+          guides.push({ type: 'vertical', position: guideX });
+        }
+      });
+    });
+
+    selSnap.horizontal.forEach((selY) => {
+      allHorizontal.forEach((guideY) => {
+        const diff = Math.abs(selY - guideY);
+        if (diff < minDiffY) {
+          minDiffY = diff;
+          snapDY = guideY - (selectedBBox.top + (selY - (selectedBBox.top + dy)));
+          guides = guides.filter((g) => g.type !== 'horizontal');
+          guides.push({ type: 'horizontal', position: guideY });
+        }
+      });
+    });
+
+    return {
+      dx: snapDX,
+      dy: snapDY,
+      guides,
+    };
+  }
+
+  /**
+   * Show snap guides
+   * @param {Array} guides - Array of guide lines
+   * @private
+   */
+  _showSnapGuides(guides) {
+    this._removeSnapGuides();
+
+    guides.forEach((guide) => {
+      const line = new fabric.Line([], {
+        stroke: 'cyan',
+        strokeWidth: 1.5,
+        selectable: false,
+        evented: false,
+      });
+
+      if (guide.type === 'vertical') {
+        line.set({
+          x1: guide.position,
+          x2: guide.position,
+          y1: 0,
+          y2: this._canvas.getHeight(),
+        });
+      } else {
+        line.set({
+          x1: 0,
+          x2: this._canvas.getWidth(),
+          y1: guide.position,
+          y2: guide.position,
+        });
+      }
+
+      this._snapGuides.push(line);
+      this._canvas.add(line);
+    });
+  }
+
+  /**
+   * Remove snap guides
+   * @private
+   */
+  _removeSnapGuides() {
+    if (!this._snapGuides) {
+      this._snapGuides = [];
+    }
+    this._snapGuides.forEach((guide) => {
+      this._canvas.remove(guide);
+    });
+    this._snapGuides = [];
   }
 }
 

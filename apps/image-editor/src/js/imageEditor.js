@@ -20,6 +20,7 @@ import {
 
 const {
   MOUSE_DOWN,
+  MOUSE_UP,
   OBJECT_MOVED,
   OBJECT_SCALED,
   OBJECT_ACTIVATED,
@@ -210,6 +211,7 @@ class ImageEditor {
     this._handlers = {
       keydown: this._onKeyDown.bind(this),
       mousedown: this._onMouseDown.bind(this),
+      mouseup: this._onMouseUp.bind(this),
       objectActivated: this._onObjectActivated.bind(this),
       objectMoved: this._onObjectMoved.bind(this),
       objectScaled: this._onObjectScaled.bind(this),
@@ -342,6 +344,7 @@ class ImageEditor {
   _attachGraphicsEvents() {
     this._graphics.on({
       [MOUSE_DOWN]: this._handlers.mousedown,
+      [MOUSE_UP]: this._handlers.mouseup,
       [OBJECT_MOVED]: this._handlers.objectMoved,
       [OBJECT_SCALED]: this._handlers.objectScaled,
       [OBJECT_ROTATED]: this._handlers.objectRotated,
@@ -450,6 +453,26 @@ class ImageEditor {
      */
 
     this.fire(events.MOUSE_DOWN, event, originPointer);
+  }
+
+  /**
+   * Mouse up event handler
+   * @param {Event} event - MouseUp event object
+   * @param {Object} originPointer - origin pointer
+   *  @param {Number} originPointer.x x position
+   *  @param {Number} originPointer.y y position
+   * @private
+   */
+  _onMouseUp(event, originPointer) {
+    /**
+     * The mouse up event with position x, y on canvas
+     * @event ImageEditor#mouseup
+     * @param {Object} event - browser mouse event object
+     * @param {Object} originPointer origin pointer
+     *  @param {Number} originPointer.x x position
+     *  @param {Number} originPointer.y y position
+     */
+    this.fire(events.MOUSE_UP, event, originPointer);
   }
 
   /**
@@ -1763,6 +1786,33 @@ class ImageEditor {
    */
   resize(dimensions) {
     return this.execute(commands.RESIZE_IMAGE, dimensions);
+  }
+
+  /**
+   * Download image as SVG file
+   * @param {string} [fileName] - The name of the downloaded file (default: image.svg)
+   * @param {Object} [options] - SVG options (see toSVG options)
+   * @returns {void}
+   * @example
+   * imageEditor.downloadSVG('customName.svg');
+   * imageEditor.downloadSVG('customName.svg', {
+   *   suppressPreamble: true,
+   *   viewBox: true
+   * });
+   */
+  downloadSVG(fileName = 'image.svg', options = {}) {
+    const svgString = this._graphics.toSVG(options);
+    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 }
 

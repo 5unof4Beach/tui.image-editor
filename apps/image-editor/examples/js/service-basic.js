@@ -476,24 +476,7 @@ $inputImage.on('change', function (event) {
 });
 
 $btnDownload.on('click', function () {
-  var imageName = imageEditor.getImageName();
-  var dataURL = imageEditor.toDataURL();
-  var blob, type, w;
-
-  if (supportingFileAPI) {
-    blob = base64ToBlob(dataURL);
-    type = blob.type.split('/')[1];
-    if (imageName.split('.').pop() !== type) {
-      imageName += '.' + type;
-    }
-
-    // Library: FileSaver - saveAs
-    saveAs(blob, imageName); // eslint-disable-line
-  } else {
-    alert('This browser needs a file-server');
-    w = window.open();
-    w.document.body.innerHTML = '<img src="' + dataURL + '">';
-  }
+  imageEditor.downloadSVG('image.svg');
 });
 
 // control draw line mode
