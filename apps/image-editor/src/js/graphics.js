@@ -1186,7 +1186,6 @@ class Graphics {
     obj.prevScaleY = obj.scaleY;
     obj.prevSx = obj.getScaledWidth();
     obj.prevSy = obj.getScaledHeight();
-    obj.set({ noScaleCache: true });
 
     this._addFabricObject(obj);
   }
@@ -1401,6 +1400,13 @@ class Graphics {
    * @private
    */
   _onObjectRotated(fEvent) {
+    const obj = fEvent.target;
+    // Snap the angle if close to 0, 90, 180, or 270 degrees
+    const snappedAngle = this._snapAngle(obj.angle);
+    if (snappedAngle !== obj.angle) {
+      obj.set('angle', snappedAngle);
+    }
+
     this._lazyFire(
       events.OBJECT_ROTATED,
       (object) => this.createObjectProperties(object),
@@ -1899,6 +1905,29 @@ class Graphics {
       this._canvas.remove(guide);
     });
     this._snapGuides = [];
+  }
+
+  /**
+   * Snap angle to nearest multiple of 90 degrees if within threshold
+   * @param {number} angle - current angle
+   * @returns {number} snapped angle
+   * @private
+   */
+  _snapAngle(angle) {
+    const ANGLE_THRESHOLD = 5; // degrees
+    const SNAP_ANGLES = [0, 90, 180, 270, 360];
+
+    // Normalize angle to 0-360
+    const normalizedAngle = ((angle % 360) + 360) % 360;
+
+    // Find closest snap angle
+    for (const snapAngle of SNAP_ANGLES) {
+      if (Math.abs(normalizedAngle - snapAngle) <= ANGLE_THRESHOLD) {
+        return snapAngle === 360 ? 0 : snapAngle;
+      }
+    }
+
+    return angle;
   }
 }
 
