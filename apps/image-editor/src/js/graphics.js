@@ -143,7 +143,8 @@ class Graphics {
       onObjectAdded: this._onObjectAdded.bind(this),
       onObjectRemoved: this._onObjectRemoved.bind(this),
       onObjectMoved: this._onObjectMoved.bind(this),
-      onObjectScaled: this._onObjectScaled.bind(this),
+      // onObjectScaled: this._onObjectScaled.bind(this),
+      onObjectScaled: this._onFabricObjectScaling.bind(this),
       onObjectModified: this._onObjectModified.bind(this),
       onObjectRotated: this._onObjectRotated.bind(this),
       onObjectSelected: this._onObjectSelected.bind(this),
@@ -1181,6 +1182,12 @@ class Graphics {
       return;
     }
 
+    obj.prevScaleX = obj.scaleX;
+    obj.prevScaleY = obj.scaleY;
+    obj.prevSx = obj.getScaledWidth();
+    obj.prevSy = obj.getScaledHeight();
+    obj.set({ noScaleCache: true });
+
     this._addFabricObject(obj);
   }
 
@@ -1239,12 +1246,132 @@ class Graphics {
     );
   }
 
+  snapGrid(cord) {
+    const gridGranularity = 10;
+    return Math.round(cord / gridGranularity) * gridGranularity;
+  }
+
+  _onFabricObjectScaling(e) {
+    const active = this.getActiveObject();
+    const [width, height] = [active.getScaledWidth(), active.getScaledHeight()];
+    const { guides } = this._calculateSnapping(
+      active,
+      width - (active.width + active.strokeWidth),
+      height - (active.height + active.strokeWidth),
+      true
+    );
+
+    if (guides.length) {
+      this._showSnapGuides(guides);
+    }
+
+    console.log(e.transform);
+
+    // X
+    if (['tl', 'ml', 'bl'].indexOf(e.transform.corner) !== -1) {
+      const tl = this.snapGrid(active.left);
+      active.scaleX = (width + active.left - tl) / (active.width + active.strokeWidth);
+      active.left = tl;
+    } else if (['tr', 'mr', 'br'].indexOf(e.transform.corner) !== -1) {
+      const tl = this.snapGrid(active.left + width);
+      active.scaleX = (tl - active.left) / (active.width + active.strokeWidth);
+    }
+
+    // Y
+    if (['tl', 'mt', 'tr'].indexOf(e.transform.corner) !== -1) {
+      const tt = this.snapGrid(active.top);
+      active.scaleY = (height + active.top - tt) / (active.height + active.strokeWidth);
+      active.top = tt;
+    } else if (['bl', 'mb', 'br'].indexOf(e.transform.corner) !== -1) {
+      const tt = this.snapGrid(active.top + height);
+      active.scaleY = (tt - active.top) / (active.height + active.strokeWidth);
+    }
+
+    // Avoid singularities
+    active.scaleX = (active.scaleY >= 0 ? 1 : -1) * Math.max(Math.abs(active.scaleX), 0.001);
+    active.scaleY = (active.scaleY >= 0 ? 1 : -1) * Math.max(Math.abs(active.scaleY), 0.001);
+  }
+
   /**
    * "object:scaling" canvas event handler
-   * @param {{target: fabric.Object, e: MouseEvent}} fEvent - Fabric event
+   * @param {{target: fabric.Object, e: MouseEvent, transform: Object}} fEvent - Fabric event
    * @private
    */
   _onObjectScaled(fEvent) {
+    this._onFabricObjectScaling(fEvent);
+    const obj = fEvent.target;
+    const { corner } = fEvent.transform;
+    const width = obj.getScaledWidth();
+    const height = obj.getScaledHeight();
+    const { prevSy, prevSx } = obj;
+    // const { prevScaleX, scaleX, prevScaleY, scaleY } = obj;
+
+    // const isScalingUpX = Math.abs(scaleX) > Math.abs(prevScaleX);
+    // const isScalingUpY = Math.abs(scaleY) > Math.abs(prevScaleY);
+    // const originalWidth = obj.origins.rb.x - obj.origins.lb.x;
+    // const originalHeight = obj.origins.rb.y - obj.origins.rt.y;
+
+    // Calculate snapping based on dimensions
+    const {
+      dx: snapWidth,
+      dy: snapHeight,
+      guides,
+    } = this._calculateSnapping(
+      obj,
+      width - (obj.width + obj.strokeWidth),
+      height - (obj.height + obj.strokeWidth),
+      false
+    );
+
+    obj.set({ prevSy: height, prevSx: width });
+
+    if (guides.length) {
+      if (width !== prevSx) {
+        if (['ml'].indexOf(corner) !== -1) {
+          obj.set({
+            scaleX: (width - snapWidth) / width,
+          });
+        } else
+          obj.set({
+            scaleX: (width + snapWidth) / width,
+          });
+      }
+
+      if (height !== prevSy) {
+        if (['mt'].indexOf(corner) !== -1) {
+          obj.set({
+            scaleY: (height - snapHeight) / height,
+          });
+        } else
+          obj.set({
+            scaleY: (height + snapHeight) / height,
+          });
+      }
+
+      if (width !== prevSx && height !== prevSy) {
+        if (['tl'].indexOf(corner) !== -1) {
+          obj.set({
+            scaleX: (width - snapWidth) / width,
+            scaleY: (height - snapHeight) / height,
+          });
+        }
+        if (['bl'].indexOf(corner) !== -1) {
+          obj.set({
+            scaleX: (width - snapWidth) / width,
+            scaleY: (height + snapHeight) / height,
+          });
+        }
+        if (['tr'].indexOf(corner) !== -1) {
+          obj.set({
+            scaleX: (width + snapWidth) / width,
+            scaleY: (height - snapHeight) / height,
+          });
+        }
+      }
+
+      this._showSnapGuides(guides);
+    }
+
     this._lazyFire(
       events.OBJECT_SCALED,
       (object) => this.createObjectProperties(object),
@@ -1619,8 +1746,8 @@ class Graphics {
    * @returns {{dx: number, dy: number, guides: Array}} - Adjusted movement and guide lines
    * @private
    */
-  _calculateSnapping(selected, dx, dy) {
-    const SNAP_THRESHOLD = 5;
+  _calculateSnapping(selected, dx, dy, useMiddle = true) {
+    const SNAP_THRESHOLD = 10;
     const zoom = this._canvas.getZoom();
     const selectedBBox = selected.getBoundingRect();
 
@@ -1637,14 +1764,31 @@ class Graphics {
         bbox.top + bbox.height, // bottom
       ],
     });
+    const getSnapPointsNoMiddle = (bbox) => ({
+      vertical: [
+        bbox.left, // left
+        bbox.left + bbox.width, // right
+      ],
+      horizontal: [
+        bbox.top, // top
+        bbox.top + bbox.height, // bottom
+      ],
+    });
 
     // Get snap points for the selected element (after move)
-    const selSnap = getSnapPoints({
-      left: selectedBBox.left + dx,
-      top: selectedBBox.top + dy,
-      width: selectedBBox.width,
-      height: selectedBBox.height,
-    });
+    const selSnap = useMiddle
+      ? getSnapPoints({
+          left: selectedBBox.left + dx,
+          top: selectedBBox.top + dy,
+          width: selectedBBox.width,
+          height: selectedBBox.height,
+        })
+      : getSnapPointsNoMiddle({
+          left: selectedBBox.left + dx,
+          top: selectedBBox.top + dy,
+          width: selectedBBox.width,
+          height: selectedBBox.height,
+        });
 
     // Gather all possible snap points from other elements
     const allVertical = [];
@@ -1658,7 +1802,7 @@ class Graphics {
 
     // Add other objects' snap points
     this._canvas.getObjects().forEach((obj) => {
-      if (obj !== selected && obj.type !== 'cropzone') {
+      if (obj !== selected && obj.type !== 'cropzone' && obj.type !== 'guideLine') {
         const bbox = obj.getBoundingRect();
         const pts = getSnapPoints(bbox);
         allVertical.push(...pts.vertical);
@@ -1726,6 +1870,7 @@ class Graphics {
           x2: guide.position,
           y1: 0,
           y2: this._canvas.getHeight(),
+          type: 'guideLine',
         });
       } else {
         line.set({
@@ -1733,6 +1878,7 @@ class Graphics {
           x2: this._canvas.getWidth(),
           y1: guide.position,
           y2: guide.position,
+          type: 'guideLine',
         });
       }
 

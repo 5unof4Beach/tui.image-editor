@@ -380,7 +380,7 @@ export default class Shape extends Component {
       selected() {
         self._isSelected = true;
         self._shapeObj = this;
-        canvas.uniformScaling = true;
+        // canvas.uniformScaling = true;
         canvas.defaultCursor = 'default';
         resizeHelper.setOrigins(self._shapeObj);
       },
