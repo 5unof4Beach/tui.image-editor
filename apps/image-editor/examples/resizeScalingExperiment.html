@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Curve Shape Demo - TOAST UI Image Editor</title>
+  <link type="text/css" href="css/service-basic.css" rel="stylesheet">
+  <style>
+    .shape-controls {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .shape-controls button {
+      margin: 5px;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <canvas id="c" width="600" height="600"></canvas>
+  <script>
+    var canvas = new fabric.Canvas('c'),
+      grid = 50;
+
+    // grid
+    for (var i = 0; i < (canvas.width / grid); i++) {
+      canvas.add(new fabric.Line([i * grid, 0, i * grid, canvas.width], { stroke: '#ccc', selectable: false }));
+      canvas.add(new fabric.Line([0, i * grid, canvas.width, i * grid], { stroke: '#ccc', selectable: false }));
+    }
+
+    canvas.add(new fabric.Rect({
+      left: 120,
+      top: 240,
+      width: 240,
+      height: 100,
+      fill: '#faa'
+    }));
+
+    canvas.on('object:scaling', function (options) {
+      var target = options.target,
+        w = target.getScaledWidth(),
+        h = target.getScaledHeight(),
+        snap = {   // Closest snapping points
+          top: Math.round(target.top / grid) * grid,
+          left: Math.round(target.left / grid) * grid,
+          bottom: Math.round((target.top + h) / grid) * grid,
+          right: Math.round((target.left + w) / grid) * grid
+        },
+        threshold = grid * 0.2,
+        dist = {   // Distance from snapping points
+          top: Math.abs(snap.top - target.top),
+          left: Math.abs(snap.left - target.left),
+          bottom: Math.abs(snap.bottom - target.top - h),
+          right: Math.abs(snap.right - target.left - w)
+        },
+        attrs = {
+          scaleX: target.scaleX,
+          scaleY: target.scaleY,
+          top: target.top,
+          left: target.left
+        };
+
+      switch (target.__corner) {
+        case 'tl':
+          if (dist.left < dist.top && dist.left < threshold) {
+            attrs.scaleX = (w - (snap.left - target.left)) / target.width;
+            attrs.scaleY = (attrs.scaleX / target.scaleX) * target.scaleY;
+            attrs.top = target.top + (h - target.height * attrs.scaleY);
+            attrs.left = snap.left;
+          }
+          else if (dist.top < threshold) {
+            attrs.scaleY = (h - (snap.top - target.top)) / target.height;
+            attrs.scaleX = (attrs.scaleY / target.scaleY) * target.scaleX;
+            attrs.left = attrs.left + (w - target.width * attrs.scaleX);
+            attrs.top = snap.top;
+          }
+          break;
+        case 'mt':
+          if (dist.top < threshold) {
+            attrs.scaleY = (h - (snap.top - target.top)) / target.height;
+            attrs.top = snap.top;
+          }
+          break;
+        case 'tr':
+          if (dist.right < dist.top && dist.right < threshold) {
+            attrs.scaleX = (snap.right - target.left) / target.width;
+            attrs.scaleY = (attrs.scaleX / target.scaleX) * target.scaleY;
+            attrs.top = target.top + (h - target.height * attrs.scaleY);
+          }
+          else if (dist.top < threshold) {
+            attrs.scaleY = (h - (snap.top - target.top)) / target.height;
+            attrs.scaleX = (attrs.scaleY / target.scaleY) * target.scaleX;
+            attrs.top = snap.top;
+          }
+          break;
+        case 'ml':
+          if (dist.left < threshold) {
+            attrs.scaleX = (w - (snap.left - target.left)) / target.width;
+            attrs.left = snap.left;
+          }
+          break;
+        case 'mr':
+          if (dist.right < threshold)
+            attrs.scaleX = (snap.right - target.left) / target.width;
+          break;
+        case 'bl':
+          if (dist.left < dist.bottom && dist.left < threshold) {
+            attrs.scaleX = (w - (snap.left - target.left)) / target.width;
+            attrs.scaleY = (attrs.scaleX / target.scaleX) * target.scaleY;
+            attrs.left = snap.left;
+          }
+          else if (dist.bottom < threshold) {
+            attrs.scaleY = (snap.bottom - target.top) / target.height;
+            attrs.scaleX = (attrs.scaleY / target.scaleY) * target.scaleX;
+            attrs.left = attrs.left + (w - target.width * attrs.scaleX);
+          }
+          break;
+        case 'mb':
+          if (dist.bottom < threshold)
+            attrs.scaleY = (snap.bottom - target.top) / target.height;
+          break;
+        case 'br':
+          if (dist.right < dist.bottom && dist.right < threshold) {
+            attrs.scaleX = (snap.right - target.left) / target.width;
+            attrs.scaleY = (attrs.scaleX / target.scaleX) * target.scaleY;
+          }
+          else if (dist.bottom < threshold) {
+            attrs.scaleY = (snap.bottom - target.top) / target.height;
+            attrs.scaleX = (attrs.scaleY / target.scaleY) * target.scaleX;
+          }
+          break;
+      }
+
+      target.set(attrs);
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-Point Curve Demo - Fabric.js</title>
+    <style>
+        .controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .controls button {
+            margin: 5px;
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        .controls button.active {
+            background-color: #2196f3;
+            color: white;
+        }
+        #canvas-container {
+            border: 1px solid #ccc;
+            margin: 20px;
+        }
+        .instruction {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button onclick="startDrawing()">Start Drawing</button>
+        <button onclick="clearCanvas()">Clear Canvas</button>
+        <button onclick="toggleLineMode()" id="lineModeBtn">Straight Line</button>
+    </div>
+    <div class="instruction">
+        Click to add points. Hold Shift or toggle 'Straight Line' for straight segments. Click near first point to close.
+    </div>
+    <div id="canvas-container">
+        <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script>
+        const canvas = new fabric.Canvas('canvas');
+        let isDrawing = false;
+        let points = [];
+        let path = null;
+        let previewLine = null;
+        let previewPath = null;
+        let controlPoints = [];
+        let isStraightMode = false;
+        let segmentTypes = []; // Track whether each segment should be straight or curved
+        const CLOSE_THRESHOLD = 20;
+        const ANGLE_SNAP_THRESHOLD = 10; // Degrees threshold for snapping
+        const SNAP_ANGLES = [0, 45, 90, 135, 180, -135, -90, -45]; // Angles to snap to
+
+        function toggleLineMode() {
+            isStraightMode = !isStraightMode;
+            const btn = document.getElementById('lineModeBtn');
+            btn.classList.toggle('active');
+        }
+
+        function startDrawing() {
+            if (isDrawing) return;
+            clearCanvas();
+            isDrawing = true;
+            points = [];
+            controlPoints = [];
+            canvas.defaultCursor = 'crosshair';
+            canvas.on('mouse:down', addPoint);
+            canvas.on('mouse:move', updatePreview);
+        }
+
+        function calculateAngle(x1, y1, x2, y2) {
+            return Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+        }
+
+        function snapToAngle(angle) {
+            // Normalize angle to -180 to 180
+            angle = ((angle + 180) % 360) - 180;
+            
+            // Find closest snap angle
+            let closestAngle = SNAP_ANGLES[0];
+            let minDiff = Math.abs(angle - SNAP_ANGLES[0]);
+            
+            for (let snapAngle of SNAP_ANGLES) {
+                let diff = Math.abs(angle - snapAngle);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestAngle = snapAngle;
+                }
+            }
+            
+            // Only snap if we're within the threshold
+            return minDiff <= ANGLE_SNAP_THRESHOLD ? closestAngle : angle;
+        }
+
+        function getSnappedEndPoint(startPoint, endPoint) {
+            if (!isStraightMode && !event?.e?.shiftKey) return endPoint;
+
+            const angle = calculateAngle(startPoint.x, startPoint.y, endPoint.x, endPoint.y);
+            const snappedAngle = snapToAngle(angle);
+            
+            // If angle didn't snap, return original point
+            if (snappedAngle === angle) return endPoint;
+            
+            // Calculate distance between points
+            const distance = Math.sqrt(
+                Math.pow(endPoint.x - startPoint.x, 2) + 
+                Math.pow(endPoint.y - startPoint.y, 2)
+            );
+            
+            // Convert angle back to radians for Math.cos/sin
+            const radians = snappedAngle * Math.PI / 180;
+            
+            // Calculate new end point based on snapped angle
+            return {
+                x: startPoint.x + distance * Math.cos(radians),
+                y: startPoint.y + distance * Math.sin(radians)
+            };
+        }
+
+        function addPoint(event) {
+            if (!isDrawing) return;
+            
+            const pointer = canvas.getPointer(event.e);
+            let newPoint = { ...pointer };
+
+            // Apply angle snapping for straight lines
+            if (points.length > 0 && (isStraightMode || event.e.shiftKey)) {
+                const lastPoint = points[points.length - 1];
+                newPoint = getSnappedEndPoint(lastPoint, newPoint);
+            }
+
+            // Check if we're close to the first point
+            if (points.length > 2 && distanceBetweenPoints(newPoint, points[0]) < CLOSE_THRESHOLD) {
+                points.push({ ...points[0] });
+                // Add final segment type
+                segmentTypes.push(isStraightMode || event.e.shiftKey);
+                finishDrawing();
+                return;
+            }
+
+            points.push(newPoint);
+            
+            // Store the segment type when adding a point (except for first point)
+            if (points.length > 1) {
+                segmentTypes.push(isStraightMode || event.e.shiftKey);
+            }
+
+            // Add visible control point
+            const controlPoint = new fabric.Circle({
+                left: newPoint.x,
+                top: newPoint.y,
+                radius: points.length === 1 ? 6 : 4,
+                fill: points.length === 1 ? '#ff0000' : '#fff',
+                stroke: '#333',
+                strokeWidth: 1,
+                originX: 'center',
+                originY: 'center',
+                hasBorders: false,
+                hasControls: false,
+                selectable: true
+            });
+
+            controlPoints.push(controlPoint);
+            canvas.add(controlPoint);
+
+            controlPoint.on('moving', function() {
+                const index = controlPoints.indexOf(this);
+                points[index] = { x: this.left, y: this.top };
+                updateCurve();
+            });
+
+            updateCurve();
+        }
+
+        function updatePreview(event) {
+            if (!isDrawing || points.length === 0) return;
+            
+            const pointer = canvas.getPointer(event.e);
+            
+            // Remove previous preview elements
+            if (previewLine) {
+                canvas.remove(previewLine);
+                previewLine = null;
+            }
+            if (previewPath) {
+                canvas.remove(previewPath);
+                previewPath = null;
+            }
+
+            // Check if we're near the first point
+            if (points.length > 2 && distanceBetweenPoints(pointer, points[0]) < CLOSE_THRESHOLD) {
+                controlPoints[0].set({
+                    stroke: '#ff0000',
+                    strokeWidth: 2
+                });
+                // Preview closing line
+                const lastPoint = points[points.length - 1];
+                const snappedEndPoint = getSnappedEndPoint(lastPoint, points[0]);
+                
+                previewLine = new fabric.Line(
+                    [
+                        lastPoint.x,
+                        lastPoint.y,
+                        snappedEndPoint.x,
+                        snappedEndPoint.y
+                    ],
+                    {
+                        stroke: '#2196f3',
+                        strokeWidth: 2,
+                        strokeDashArray: [5, 5]
+                    }
+                );
+                canvas.add(previewLine);
+            } else {
+                if (controlPoints[0]) {
+                    controlPoints[0].set({
+                        stroke: '#333',
+                        strokeWidth: 1
+                    });
+                }
+                
+                // Draw preview line from last point to current mouse position
+                const lastPoint = points[points.length - 1];
+                if (isStraightMode || event.e.shiftKey) {
+                    // Straight line preview with angle snapping
+                    const snappedEndPoint = getSnappedEndPoint(lastPoint, pointer);
+                    
+                    previewLine = new fabric.Line(
+                        [lastPoint.x, lastPoint.y, snappedEndPoint.x, snappedEndPoint.y],
+                        {
+                            stroke: '#2196f3',
+                            strokeWidth: 2,
+                            strokeDashArray: [5, 5]
+                        }
+                    );
+                    canvas.add(previewLine);
+                } else {
+                    // Curve preview - store the preview path reference
+                    const previewPoints = [...points, pointer];
+                    updateCurve(previewPoints, true);
+                }
+            }
+
+            canvas.renderAll();
+        }
+
+        function updateCurve(currentPoints = points, isPreview = false) {
+            if (currentPoints.length < 2) return;
+
+            // Remove existing paths
+            if (path && !isPreview) {
+                canvas.remove(path);
+            }
+            if (previewPath) {
+                canvas.remove(previewPath);
+            }
+
+            let pathData = `M ${currentPoints[0].x} ${currentPoints[0].y}`;
+            
+            for (let i = 1; i < currentPoints.length; i++) {
+                const prev = currentPoints[i - 1];
+                const curr = currentPoints[i];
+                const next = currentPoints[i + 1];
+                
+                const isLastSegment = i === currentPoints.length - 1;
+                const isPreviewSegment = isPreview && isLastSegment;
+                
+                // Use stored segment type or current state for preview
+                const isSegmentStraight = isPreview ? 
+                    (isStraightMode || event?.e?.shiftKey) : 
+                    segmentTypes[i - 1];
+
+                if (isSegmentStraight) {
+                    // Straight line segment
+                    pathData += ` L ${curr.x} ${curr.y}`;
+                } else {
+                    // Smooth curve segment
+                    if (isPreviewSegment) {
+                        // Simple curve for preview
+                        const cp1x = prev.x + (curr.x - prev.x) * 0.5;
+                        const cp1y = prev.y + (curr.y - prev.y) * 0.5;
+                        pathData += ` C ${cp1x} ${cp1y}, ${curr.x} ${curr.y}, ${curr.x} ${curr.y}`;
+                    } else {
+                        // Full smooth curve segment
+                        const cp1x = prev.x + (curr.x - prev.x) * 0.5;
+                        const cp1y = prev.y + (curr.y - prev.y) * 0.5;
+                        const cp2x = curr.x - (next ? (next.x - prev.x) * 0.2 : 0);
+                        const cp2y = curr.y - (next ? (next.y - prev.y) * 0.2 : 0);
+                        pathData += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${curr.x} ${curr.y}`;
+                    }
+                }
+            }
+
+            // Create and add the new path
+            const newPath = new fabric.Path(pathData, {
+                stroke: '#2196f3',
+                strokeWidth: 2,
+                fill: isPreview ? 'transparent' : 'rgba(33, 150, 243, 0.2)',
+                selectable: false
+            });
+            
+            if (!isPreview) {
+                path = newPath;
+            } else {
+                previewPath = newPath;
+            }
+            
+            canvas.add(newPath);
+            newPath.sendToBack();
+        }
+
+        function finishDrawing() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            
+            // Clean up all preview elements
+            if (previewLine) {
+                canvas.remove(previewLine);
+                previewLine = null;
+            }
+            if (previewPath) {
+                canvas.remove(previewPath);
+                previewPath = null;
+            }
+
+            canvas.off('mouse:down', addPoint);
+            canvas.off('mouse:move', updatePreview);
+
+            updateCurve(points);
+
+            if (path) {
+                path.set({
+                    selectable: true,
+                    hasControls: true,
+                    hasBorders: true
+                });
+            }
+
+            canvas.requestRenderAll();
+        }
+
+        function distanceBetweenPoints(p1, p2) {
+            return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p1.y - p2.y, 2));
+        }
+
+        function clearCanvas() {
+            canvas.clear();
+            canvas.setBackgroundColor('#ffffff', canvas.renderAll.bind(canvas));
+            points = [];
+            controlPoints = [];
+            segmentTypes = []; // Reset segment types
+            path = null;
+            previewLine = null;
+            isDrawing = false;
+        }
+
+        // Initialize canvas
+        canvas.setBackgroundColor('#ffffff', canvas.renderAll.bind(canvas));
+    </script>
+</body>
+</html>
