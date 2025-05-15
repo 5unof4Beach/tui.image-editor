@@ -26,17 +26,19 @@
 </head>
 
 <body>
-  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-  <canvas id="c" width="600" height="600"></canvas>
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <canvas id="c" width="800" height="600"></canvas>
   <script>
-    var canvas = new fabric.Canvas('c'),
-      grid = 50;
+    const canvas = new fabric.Canvas('c')
+    canvas.uniformScaling = false;
+    const grid = 50;
+    _snapGuides = [];
 
     // grid
-    for (var i = 0; i < (canvas.width / grid); i++) {
-      canvas.add(new fabric.Line([i * grid, 0, i * grid, canvas.width], { stroke: '#ccc', selectable: false }));
-      canvas.add(new fabric.Line([0, i * grid, canvas.width, i * grid], { stroke: '#ccc', selectable: false }));
-    }
+    // for (let i = 0; i < (canvas.width / grid); i++) {
+    //   canvas.add(new fabric.Line([i * grid, 0, i * grid, canvas.width], { stroke: '#ccc', selectable: false }));
+    // }
+    // canvas.add(new fabric.Line([400, 0, 400, canvas.height], { stroke: '#ccc', selectable: false }));
 
     canvas.add(new fabric.Rect({
       left: 120,
@@ -46,23 +48,18 @@
       fill: '#faa'
     }));
 
+    canvas.on('mouse:up', function (options) {
+      _removeSnapGuides()
+    })
+
     canvas.on('object:scaling', function (options) {
-      var target = options.target,
+      const { target } = options,
         w = target.getScaledWidth(),
         h = target.getScaledHeight(),
-        snap = {   // Closest snapping points
-          top: Math.round(target.top / grid) * grid,
-          left: Math.round(target.left / grid) * grid,
-          bottom: Math.round((target.top + h) / grid) * grid,
-          right: Math.round((target.left + w) / grid) * grid
-        },
-        threshold = grid * 0.2,
-        dist = {   // Distance from snapping points
-          top: Math.abs(snap.top - target.top),
-          left: Math.abs(snap.left - target.left),
-          bottom: Math.abs(snap.bottom - target.top - h),
-          right: Math.abs(snap.right - target.left - w)
-        },
+        originalW = target.width * target.scaleX,
+        originalH = target.height * target.scaleY,
+        threshold = 10,
+        
         attrs = {
           scaleX: target.scaleX,
           scaleY: target.scaleY,
@@ -70,79 +67,270 @@
           left: target.left
         };
 
+      const {
+        dx: snapWidth,
+        dy: snapHeight,
+        guides,
+      } = _calculateSnapping(
+        target,
+        originalW - (target.width + target.strokeWidth),
+        originalH - (target.height + target.strokeWidth),
+        true
+      );
+
+      const snap = {
+        top: snapHeight,
+        left: snapWidth,
+        bottom: snapHeight,
+        right: snapWidth
+      };
+
+      const dist = {
+        top: Math.abs(snap.top - target.top),
+        bottom: Math.abs(snap.bottom - target.top - h),
+        left: Math.abs(snap.left - target.left),
+        right: Math.abs(snap.right - target.left - w)
+      };
+
+      console.log(target.left);
+      // console.log({...snap});
       switch (target.__corner) {
+        case 'mr':
+          if (dist.right < threshold) {
+            const newWidth = snap.right - target.left;
+            attrs.scaleX = newWidth / target.width;
+          }
+          break;
         case 'tl':
-          if (dist.left < dist.top && dist.left < threshold) {
-            attrs.scaleX = (w - (snap.left - target.left)) / target.width;
-            attrs.scaleY = (attrs.scaleX / target.scaleX) * target.scaleY;
-            attrs.top = target.top + (h - target.height * attrs.scaleY);
+          if (dist.left < threshold) {
+            // Snap to left grid line
+            const newWidth = originalW - (snap.left - target.left);
+            attrs.scaleX = newWidth / target.width;
             attrs.left = snap.left;
           }
-          else if (dist.top < threshold) {
-            attrs.scaleY = (h - (snap.top - target.top)) / target.height;
-            attrs.scaleX = (attrs.scaleY / target.scaleY) * target.scaleX;
-            attrs.left = attrs.left + (w - target.width * attrs.scaleX);
+          if (dist.top < threshold) {
+            // Snap to top grid line independently
+            const newHeight = originalH - (snap.top - target.top);
+            attrs.scaleY = newHeight / target.height;
             attrs.top = snap.top;
           }
           break;
         case 'mt':
           if (dist.top < threshold) {
-            attrs.scaleY = (h - (snap.top - target.top)) / target.height;
+            const newHeight = originalH - (snap.top - target.top);
+            attrs.scaleY = newHeight / target.height;
             attrs.top = snap.top;
           }
           break;
         case 'tr':
-          if (dist.right < dist.top && dist.right < threshold) {
-            attrs.scaleX = (snap.right - target.left) / target.width;
-            attrs.scaleY = (attrs.scaleX / target.scaleX) * target.scaleY;
-            attrs.top = target.top + (h - target.height * attrs.scaleY);
+          if (dist.right < threshold) {
+            // Snap to right grid line
+            const newWidth = snap.right - target.left;
+            attrs.scaleX = newWidth / target.width;
           }
-          else if (dist.top < threshold) {
-            attrs.scaleY = (h - (snap.top - target.top)) / target.height;
-            attrs.scaleX = (attrs.scaleY / target.scaleY) * target.scaleX;
+          if (dist.top < threshold) {
+            // Snap to top grid line independently
+            const newHeight = originalH - (snap.top - target.top);
+            attrs.scaleY = newHeight / target.height;
             attrs.top = snap.top;
           }
           break;
         case 'ml':
           if (dist.left < threshold) {
-            attrs.scaleX = (w - (snap.left - target.left)) / target.width;
+            const newWidth = originalW - (snap.left - target.left);
+            attrs.scaleX = newWidth / target.width;
             attrs.left = snap.left;
           }
-          break;
-        case 'mr':
-          if (dist.right < threshold)
-            attrs.scaleX = (snap.right - target.left) / target.width;
           break;
         case 'bl':
-          if (dist.left < dist.bottom && dist.left < threshold) {
-            attrs.scaleX = (w - (snap.left - target.left)) / target.width;
-            attrs.scaleY = (attrs.scaleX / target.scaleX) * target.scaleY;
+          if (dist.left < threshold) {
+            // Snap to left grid line
+            const newWidth = originalW - (snap.left - target.left);
+            attrs.scaleX = newWidth / target.width;
             attrs.left = snap.left;
           }
-          else if (dist.bottom < threshold) {
-            attrs.scaleY = (snap.bottom - target.top) / target.height;
-            attrs.scaleX = (attrs.scaleY / target.scaleY) * target.scaleX;
-            attrs.left = attrs.left + (w - target.width * attrs.scaleX);
+          if (dist.bottom < threshold) {
+            // Snap to bottom grid line independently
+            const newHeight = snap.bottom - target.top;
+            attrs.scaleY = newHeight / target.height;
           }
           break;
         case 'mb':
-          if (dist.bottom < threshold)
-            attrs.scaleY = (snap.bottom - target.top) / target.height;
+          if (dist.bottom < threshold) {
+            const newHeight = snap.bottom - target.top;
+            attrs.scaleY = newHeight / target.height;
+          }
           break;
         case 'br':
-          if (dist.right < dist.bottom && dist.right < threshold) {
-            attrs.scaleX = (snap.right - target.left) / target.width;
-            attrs.scaleY = (attrs.scaleX / target.scaleX) * target.scaleY;
+          if (dist.right < threshold) {
+            // Snap to right grid line
+            const newWidth = snap.right - target.left;
+            attrs.scaleX = newWidth / target.width;
           }
-          else if (dist.bottom < threshold) {
-            attrs.scaleY = (snap.bottom - target.top) / target.height;
-            attrs.scaleX = (attrs.scaleY / target.scaleY) * target.scaleX;
+          if (dist.bottom < threshold) {
+            // Snap to bottom grid line independently
+            const newHeight = snap.bottom - target.top;
+            attrs.scaleY = newHeight / target.height;
           }
           break;
       }
 
       target.set(attrs);
+      _showSnapGuides(guides);
     });
+
+    function _calculateSnapping(selected, dx, dy, useMiddle = true) {
+      const SNAP_THRESHOLD = 10;
+      const zoom = canvas.getZoom();
+      const selectedBBox = selected.getBoundingRect();
+
+      // Helper to get all snap points for a bbox
+      const getSnapPoints = (bbox) => ({
+        vertical: [
+          bbox.left, // left
+          bbox.left + bbox.width / 2, // center
+          bbox.left + bbox.width, // right
+        ],
+        horizontal: [
+          bbox.top, // top
+          bbox.top + bbox.height / 2, // center
+          bbox.top + bbox.height, // bottom
+        ],
+      });
+      const getSnapPointsNoMiddle = (bbox) => ({
+        vertical: [
+          bbox.left, // left
+          bbox.left + bbox.width, // right
+        ],
+        horizontal: [
+          bbox.top, // top
+          bbox.top + bbox.height, // bottom
+        ],
+      });
+
+      // Get snap points for the selected element (after move)
+      const selSnap = useMiddle
+        ? getSnapPoints({
+          left: selectedBBox.left,
+          top: selectedBBox.top,
+          width: selectedBBox.width,
+          height: selectedBBox.height,
+        })
+        : getSnapPointsNoMiddle({
+          left: selectedBBox.left,
+          top: selectedBBox.top,
+          width: selectedBBox.width,
+          height: selectedBBox.height,
+        });
+
+      // Gather all possible snap points from other elements
+      const allVertical = [];
+      const allHorizontal = [];
+      const canvasWidth = canvas.getWidth() / zoom;
+      const canvasHeight = canvas.getHeight() / zoom;
+
+      // Add canvas edges and center lines
+      allVertical.push(0, canvasWidth / 2, canvasWidth - 1);
+      allHorizontal.push(0, canvasHeight / 2, canvasHeight - 1);
+
+      // Add other objects' snap points
+      canvas.getObjects().forEach((obj) => {
+        if (obj !== selected && obj.type !== 'cropzone' && obj.type !== 'guideLine') {
+          const bbox = obj.getBoundingRect();
+          const pts = getSnapPoints(bbox);
+          allVertical.push(...pts.vertical);
+          allHorizontal.push(...pts.horizontal);
+        }
+      });
+
+      // Find closest snap for each axis
+      const minDiffX = SNAP_THRESHOLD;
+      const minDiffY = SNAP_THRESHOLD;
+      let snapDX = dx;
+      let snapDY = dy;
+      let guides = [];
+
+      selSnap.vertical.forEach((selX) => {
+        allVertical.forEach((guideX) => {
+          const diff = Math.abs(selX - guideX);
+          if (diff < minDiffX) {
+            snapDX = guideX;
+            guides = guides.filter((g) => g.type !== 'vertical');
+            guides.push({ type: 'vertical', position: guideX });
+          }
+        });
+      });
+
+      selSnap.horizontal.forEach((selY) => {
+        allHorizontal.forEach((guideY) => {
+          const diff = Math.abs(selY - guideY);
+          if (diff < minDiffY) {
+            snapDY = guideY;
+            guides = guides.filter((g) => g.type !== 'horizontal');
+            guides.push({ type: 'horizontal', position: guideY });
+          }
+        });
+      });
+
+      return {
+        dx: snapDX,
+        dy: snapDY,
+        guides,
+      };
+    }
+
+    /**
+     * Show snap guides
+     * @param {Array} guides - Array of guide lines
+     * @private
+     */
+    function _showSnapGuides(guides) {
+      _removeSnapGuides();
+
+      guides.forEach((guide) => {
+        const line = new fabric.Line([], {
+          stroke: 'cyan',
+          strokeWidth: 1.5,
+          selectable: false,
+          evented: false,
+        });
+
+        if (guide.type === 'vertical') {
+          line.set({
+            x1: guide.position,
+            x2: guide.position,
+            y1: 0,
+            y2: canvas.getHeight(),
+            type: 'guideLine',
+          });
+        } else {
+          line.set({
+            x1: 0,
+            x2: canvas.getWidth(),
+            y1: guide.position,
+            y2: guide.position,
+            type: 'guideLine',
+          });
+        }
+
+        _snapGuides.push(line);
+        canvas.add(line);
+      });
+    }
+
+    /**
+     * Remove snap guides
+     * @private
+     */
+    function _removeSnapGuides() {
+      if (!_snapGuides) {
+        _snapGuides = [];
+      }
+      _snapGuides.forEach((guide) => {
+        canvas.remove(guide);
+      });
+      _snapGuides = [];
+    }
   </script>
 </body>
 
