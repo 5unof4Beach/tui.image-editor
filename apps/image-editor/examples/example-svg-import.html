@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive SVG Path Points - Fabric.js</title>
+  <style>
+    .controls {
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      width: 400px;
+    }
+
+    #svg-input {
+      width: 100%;
+      height: 120px;
+      margin-bottom: 10px;
+      padding: 8px;
+      font-family: monospace;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .controls button {
+      margin: 5px;
+      padding: 8px 16px;
+      cursor: pointer;
+      background: #4A90E2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+
+    .controls button:hover {
+      background: #357ABD;
+    }
+
+    .mode-buttons button.active {
+      background: #2196f3;
+    }
+
+    #points-display {
+      margin-top: 15px;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    #canvas {
+      border: 1px solid #ccc;
+    }
+
+    .instruction {
+      position: fixed;
+      top: 80px;
+      left: 20px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="controls">
+    <h3>Advanced Path Editor</h3>
+    <textarea id="svg-input" placeholder="Paste your SVG path data here..."></textarea>
+    <button id="import-svg">Import Path</button>
+    <button id="clear-canvas">Clear Canvas</button>
+    <div class="mode-buttons">
+      <button id="edit-mode">Edit Mode</button>
+      <button id="add-point">Add Points</button>
+      <button id="delete-point">Delete Points</button>
+    </div>
+    <button id="smooth-path">Smooth Path</button>
+    <button id="export-path">Export Path</button>
+    <div id="points-display"></div>
+  </div>
+  <!-- <div class="instruction">
+    Edit Mode: Drag points and control handles to modify the path.
+    Add Points: Click on path to add new points.
+    Delete Points: Click points to remove them.
+  </div> -->
+  <canvas id="canvas" width="1000" height="800"></canvas>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script>
+    const canvas = new fabric.Canvas('canvas', {
+      preserveObjectStacking: true
+    });
+
+    let currentPath = null;
+    let allPaths = [];
+    let currentMode = 'edit';
+    let controlPoints = [];
+    let anchorPoints = [];
+    let isEditing = false;
+    let selectionState = 'none'; // none, selected, editing
+
+    const editIcon = "data:image/svg+xml,%3C%3Fxml version='1.0' encoding='utf-8'%3F%3E%3C!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'%3E%3Csvg version='1.1' id='Ebene_1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' x='0px' y='0px' width='595.275px' height='595.275px' viewBox='200 215 230 470' xml:space='preserve'%3E%3Ccircle style='fill:%23F44336;' cx='299.76' cy='439.067' r='218.516'/%3E%3Cg%3E%3Crect x='267.162' y='307.978' transform='matrix(0.7071 -0.7071 0.7071 0.7071 -222.6202 340.6915)' style='fill:white;' width='65.545' height='262.18'/%3E%3Crect x='266.988' y='308.153' transform='matrix(0.7071 0.7071 -0.7071 0.7071 398.3889 -83.3116)' style='fill:white;' width='65.544' height='262.179'/%3E%3C/g%3E%3C/svg%3E";
+    const editImg = document.createElement('img');
+    editImg.src = editIcon;
+
+    function renderIcon(ctx, left, top, _styleOverride, fabricObject) {
+      const size = this.cornerSize;
+      ctx.save();
+      ctx.translate(left, top);
+      ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
+      ctx.drawImage(editImg, -size / 2, -size / 2, size, size);
+      ctx.restore();
+    }
+
+    // Example complex path
+    const complexPath = `<svg xmlns="http://www.w3.org/2000/svg">
+            <path d="M 0 460 L 21.5 458.8 C 43 457.7 86 455.3 128.8 459.3 C 171.7 463.3 214.3 473.7 257.2 478 C 300 482.3 343 480.7 385.8 466 C 428.7 451.3 471.3 423.7 514.2 409.8 C 557 396 600 396 642.8 396.8 C 685.7 397.7 728.3 399.3 771.2 397.5 C 814 395.7 857 390.3 878.5 387.7 L 900 385 L 900 601 L 878.5 601 C 857 601 814 601 771.2 601 C 728.3 601 685.7 601 642.8 601 C 600 601 557 601 514.2 601 C 471.3 601 428.7 601 385.8 601 C 343 601 300 601 257.2 601 C 214.3 601 171.7 601 128.8 601 C 86 601 43 601 21.5 601 L 0 601 L 0 460 z" fill="#0066FF" stroke-linecap="round" stroke-linejoin="miter"/>
+        </svg>`;
+
+    // Set default SVG in textarea
+    document.getElementById('svg-input').value = complexPath;
+
+    class PathPoint {
+      constructor(x, y, type = 'point') {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.controlPoint1 = null;
+        this.controlPoint2 = null;
+        this.fabricPoint = this.createFabricPoint();
+      }
+
+      createFabricPoint() {
+        const point = new fabric.Circle({
+          left: this.x,
+          top: this.y,
+          radius: this.type === 'point' ? 6 : 4,
+          fill: this.type === 'point' ? '#ff0000' : '#00ff00',
+          stroke: '#333',
+          strokeWidth: 1,
+          originX: 'center',
+          originY: 'center',
+          hasBorders: false,
+          hasControls: false,
+          selectable: true,
+          data: { type: this.type }
+        });
+
+        point.on('moving', () => {
+          this.x = point.left;
+          this.y = point.top;
+          if (this.type === 'point') {
+            this.updateControlPoints();
+          }
+          updatePathFromPoints();
+        });
+
+        return point;
+      }
+
+      setControlPoints(cp1x, cp1y, cp2x, cp2y) {
+        if (!this.controlPoint1) {
+          this.controlPoint1 = new PathPoint(cp1x, cp1y, 'control');
+          this.controlPoint2 = new PathPoint(cp2x, cp2y, 'control');
+        } else {
+          this.controlPoint1.x = cp1x;
+          this.controlPoint1.y = cp1y;
+          this.controlPoint2.x = cp2x;
+          this.controlPoint2.y = cp2y;
+          this.controlPoint1.fabricPoint.set({ left: cp1x, top: cp1y });
+          this.controlPoint2.fabricPoint.set({ left: cp2x, top: cp2y });
+        }
+        canvas.renderAll();
+      }
+
+      updateControlPoints() {
+        if (this.controlPoint1 && this.controlPoint2) {
+          const dx = this.fabricPoint.left - this.x;
+          const dy = this.fabricPoint.top - this.y;
+
+          this.x = this.fabricPoint.left;
+          this.y = this.fabricPoint.top;
+
+          this.controlPoint1.x += dx;
+          this.controlPoint1.y += dy;
+          this.controlPoint2.x += dx;
+          this.controlPoint2.y += dy;
+
+          this.controlPoint1.fabricPoint.set({
+            left: this.controlPoint1.x,
+            top: this.controlPoint1.y
+          });
+          this.controlPoint2.fabricPoint.set({
+            left: this.controlPoint2.x,
+            top: this.controlPoint2.y
+          });
+
+          // Update path directly without recreation
+          if (currentPath) {
+            updatePathFromPoints(true);
+          }
+
+          canvas.requestRenderAll();
+        }
+      }
+    }
+
+    function getSmallestPoint() {
+      if (!currentPath || !currentPath.path) return null;
+
+      let smallestX = 1000;
+      let smallestY = 800;
+
+      // Loop through path commands
+      currentPath.path.forEach(cmd => {
+        switch (cmd[0]) {
+          case 'M': // Move to
+          case 'L': // Line to
+            smallestX = Math.min(smallestX, cmd[1]);
+            smallestY = Math.min(smallestY, cmd[2]);
+            break;
+          case 'C': // Cubic bezier
+            // Check control points
+            smallestX = Math.min(smallestX, cmd[1], cmd[3], cmd[5]);
+            smallestY = Math.min(smallestY, cmd[2], cmd[4], cmd[6]);
+            break;
+          case 'Q': // Quadratic bezier
+            smallestX = Math.min(smallestX, cmd[1], cmd[3]);
+            smallestY = Math.min(smallestY, cmd[2], cmd[4]);
+            break;
+        }
+      });
+
+      return {
+        x: smallestX === Infinity ? 0 : smallestX,
+        y: smallestY === Infinity ? 0 : smallestY
+      };
+    }
+
+    function createPathEditor(pathObject) {
+      // Clear existing points
+      controlPoints.forEach(point => canvas.remove(point.fabricPoint));
+      anchorPoints = [];
+      controlPoints = [];
+
+      // Initialize the path with selection capabilities
+      const initialPath = new fabric.Path(pathObject.path, {
+        left: pathObject.left,
+        top: pathObject.top,
+        fill: pathObject.fill,
+        selectable: true,
+        hasControls: true,
+        hasBorders: true,
+        perPixelTargetFind: true
+      });
+
+      // Add movement event handlers
+      initialPath.on('moving', () => {
+        hideControlPoints(); // Hide points when moving
+      });
+
+      // Remove moved handler since we don't need to update points during movement
+      if (currentPath) {
+        canvas.remove(currentPath);
+      }
+      canvas.add(initialPath);
+      currentPath = initialPath;
+      selectionState = 'none';
+
+      currentPath.controls.editControl = new fabric.Control({
+        x: 0.5,
+        y: -0.5,
+        offsetY: 16,
+        cursorStyle: 'pointer',
+        mouseUpHandler: editObject,
+        render: renderIcon,
+        cornerSize: 24,
+      });
+
+      canvas.requestRenderAll();
+    }
+
+    function editObject(_eventData, transform) {
+      const targetPath = transform.target;
+      
+      // If we're already editing a different path, exit its edit mode
+      if (currentPath && currentPath !== targetPath) {
+        exitEditMode();
+      }
+
+      currentPath = targetPath;
+      selectionState = 'editing';
+      
+      // Update path appearance
+      currentPath.set({
+        selectable: false,
+        hasControls: false,
+        hasBorders: false,
+        evented: true
+      });
+
+      // Make other paths selectable but not editable
+      allPaths.forEach(path => {
+        if (path !== currentPath) {
+          path.set({
+            selectable: true,
+            hasControls: true,
+            hasBorders: true,
+            evented: true
+          });
+        }
+      });
+
+      showControlPoints();
+    }
+
+    function showControlPoints() {
+      // Parse path commands and create control points
+      const center = canvas.getCenter();
+      const commands = currentPath.path;
+      const pathLeft = currentPath.left || 0;
+      const pathTop = currentPath.top || 0;
+      // const pathLeft = center.left;
+      // const pathTop = center.top;
+      const scaleX = currentPath.scaleX || 1;
+      const scaleY = currentPath.scaleY || 1;
+      const { x: minX, y: minY } = getSmallestPoint();
+
+      commands.forEach((cmd, i) => {
+        switch (cmd[0]) {
+          case 'M':
+          case 'L':
+            const left = cmd[1] * scaleX;
+            const top = cmd[2] * scaleY;
+            const point = new PathPoint(
+              left - (minX - pathLeft),
+              top - (minY - pathTop)
+            );
+            anchorPoints.push(point);
+            point.fabricPoint.bringToFront();
+            canvas.add(point.fabricPoint);
+            break;
+          case 'C':
+            const lastPoint = anchorPoints[anchorPoints.length - 1];
+            if (lastPoint) {
+              lastPoint.setControlPoints(
+                cmd[1] * scaleX - (minX - pathLeft), cmd[2] * scaleY - (minY - pathTop),
+                cmd[3] * scaleX - (minX - pathLeft), cmd[4] * scaleY - (minY - pathTop)
+              );
+              canvas.add(lastPoint.controlPoint1.fabricPoint);
+              canvas.add(lastPoint.controlPoint2.fabricPoint);
+              lastPoint.controlPoint1.fabricPoint.bringToFront();
+              lastPoint.controlPoint2.fabricPoint.bringToFront();
+              controlPoints.push(lastPoint.controlPoint1);
+              controlPoints.push(lastPoint.controlPoint2);
+            }
+
+            const endPoint = new PathPoint(
+              cmd[5] * scaleX - (minX - pathLeft),
+              cmd[6] * scaleY - (minY - pathTop)
+            );
+            anchorPoints.push(endPoint);
+            canvas.add(endPoint.fabricPoint);
+            endPoint.fabricPoint.bringToFront();
+            break;
+        }
+      });
+
+      // Store current path transform for future reference
+      currentPath._lastLeft = pathLeft;
+      currentPath._lastTop = pathTop;
+      currentPath._lastScaleX = scaleX;
+      currentPath._lastScaleY = scaleY;
+    }
+
+    function hideControlPoints() {
+      // Remove all control points from canvas
+      controlPoints.forEach(point => canvas.remove(point.fabricPoint));
+      anchorPoints.forEach(point => {
+        canvas.remove(point.fabricPoint);
+        if (point.controlPoint1) {
+          canvas.remove(point.controlPoint1.fabricPoint);
+          canvas.remove(point.controlPoint2.fabricPoint);
+        }
+      });
+      controlPoints = [];
+      anchorPoints = [];
+    }
+
+    function updatePathFromPoints(keepPathObject = false) {
+      if (!currentPath || anchorPoints.length < 2) return;
+
+      let pathData = `M ${anchorPoints[0].x} ${anchorPoints[0].y}`;
+
+      for (let i = 1; i < anchorPoints.length; i++) {
+        const current = anchorPoints[i];
+        const previous = anchorPoints[i - 1];
+
+        if (previous.controlPoint1 && previous.controlPoint2) {
+          pathData += ` C ${previous.controlPoint1.x} ${previous.controlPoint1.y}, ${previous.controlPoint2.x} ${previous.controlPoint2.y}, ${current.x} ${current.y}`;
+        } else {
+          pathData += ` L ${current.x} ${current.y}`;
+        }
+      }
+
+      if (currentPath.path[currentPath.path.length - 1][0] === 'z') {
+        pathData += ' z';
+      }
+
+      if (keepPathObject) {
+        // Update existing path object
+        currentPath.set({
+          path: pathData
+        });
+      } else {
+        // Create new path object
+        const initialPath = new fabric.Path(pathData, {
+          fill: currentPath.fill,
+          selectable: true,
+          evented: false
+        });
+
+        // Remove old path and add new one
+        if (currentPath) {
+          canvas.remove(currentPath);
+        }
+        canvas.add(initialPath);
+        currentPath = initialPath;
+        currentPath.sendToBack();
+      }
+
+      canvas.requestRenderAll();
+    }
+
+    function smoothPath() {
+      if (!currentPath || anchorPoints.length < 3) return;
+
+      for (let i = 1; i < anchorPoints.length - 1; i++) {
+        const prev = anchorPoints[i - 1];
+        const curr = anchorPoints[i];
+        const next = anchorPoints[i + 1];
+
+        // Calculate control points for smooth curve
+        const dx = next.x - prev.x;
+        const dy = next.y - prev.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const factor = len / 3;
+
+        const angle = Math.atan2(dy, dx);
+
+        if (!curr.controlPoint1) {
+          curr.setControlPoints(
+            curr.x - Math.cos(angle) * factor,
+            curr.y - Math.sin(angle) * factor,
+            curr.x + Math.cos(angle) * factor,
+            curr.y + Math.sin(angle) * factor
+          );
+          canvas.add(curr.controlPoint1.fabricPoint);
+          canvas.add(curr.controlPoint2.fabricPoint);
+          controlPoints.push(curr.controlPoint1);
+          controlPoints.push(curr.controlPoint2);
+        }
+      }
+
+      updatePathFromPoints();
+    }
+
+    // Mode handlers
+    function setMode(mode) {
+      currentMode = mode;
+      document.querySelectorAll('.mode-buttons button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.getElementById(mode + '-mode')?.classList.add('active');
+
+      // Update cursor and event handlers based on mode
+      switch (mode) {
+        case 'edit':
+          canvas.defaultCursor = 'default';
+          break;
+        case 'add-point':
+          canvas.defaultCursor = 'crosshair';
+          break;
+        case 'delete-point':
+          canvas.defaultCursor = 'not-allowed';
+          break;
+      }
+    }
+
+    function addPointToPath(e) {
+      if (currentMode !== 'add-point' || !currentPath) return;
+
+      const pointer = canvas.getPointer(e);
+      const point = new PathPoint(pointer.x, pointer.y);
+      anchorPoints.push(point);
+      canvas.add(point.fabricPoint);
+
+      updatePathFromPoints();
+    }
+
+    function deletePoint(point) {
+      if (currentMode !== 'delete-point') return;
+
+      const index = anchorPoints.indexOf(point);
+      if (index > -1) {
+        canvas.remove(point.fabricPoint);
+        if (point.controlPoint1) {
+          canvas.remove(point.controlPoint1.fabricPoint);
+          canvas.remove(point.controlPoint2.fabricPoint);
+        }
+        anchorPoints.splice(index, 1);
+        updatePathFromPoints();
+      }
+    }
+
+    // Import SVG function
+    function importSVG(svgString) {
+      fabric.loadSVGFromString(svgString, function (objects, options) {
+        // Clear canvas
+        canvas.clear();
+        controlPoints = [];
+        anchorPoints = [];
+        allPaths = [];
+        currentPath = null;
+
+        // Add all path objects to canvas
+        objects.forEach(obj => {
+          if (obj instanceof fabric.Path) {
+            // Add to canvas
+            canvas.add(obj);
+            allPaths.push(obj);
+            
+            // Add edit control to each path
+            obj.controls.editControl = new fabric.Control({
+              x: 0.5,
+              y: -0.5,
+              offsetY: 16,
+              cursorStyle: 'pointer',
+              mouseUpHandler: editObject,
+              render: renderIcon,
+              cornerSize: 24
+            });
+
+            // Add movement event handler
+            obj.on('moving', () => {
+              if (obj === currentPath) {
+                hideControlPoints();
+              }
+            });
+          }
+        });
+
+        canvas.requestRenderAll();
+      });
+    }
+
+    function exitEditMode() {
+      hideControlPoints();
+      selectionState = 'none';
+      if (currentPath) {
+        // Restore current path controls
+        currentPath.set({
+          selectable: true,
+          hasControls: true,
+          hasBorders: true,
+          evented: true
+        });
+        currentPath = null;
+      }
+      canvas.requestRenderAll();
+    }
+
+    // Event Listeners
+    document.getElementById('import-svg').addEventListener('click', () => {
+      const svgString = document.getElementById('svg-input').value;
+      importSVG(svgString);
+    });
+
+    document.getElementById('clear-canvas').addEventListener('click', () => {
+      canvas.clear();
+      controlPoints = [];
+      anchorPoints = [];
+      currentPath = null;
+    });
+
+    document.getElementById('edit-mode').addEventListener('click', () => setMode('edit'));
+    document.getElementById('add-point').addEventListener('click', () => setMode('add-point'));
+    document.getElementById('delete-point').addEventListener('click', () => setMode('delete-point'));
+
+    document.getElementById('smooth-path').addEventListener('click', smoothPath);
+
+    document.getElementById('export-path').addEventListener('click', () => {
+      if (!currentPath) return;
+      const pathData = currentPath.path.map(cmd => cmd.join(' ')).join(' ');
+      const svgString = `<svg xmlns="http://www.w3.org/2000/svg">
+                <path d="${pathData}" fill="${currentPath.fill}" stroke-linecap="${currentPath.strokeLineCap}" stroke-linejoin="${currentPath.strokeLineJoin}"/>
+            </svg>`;
+      document.getElementById('svg-input').value = svgString;
+    });
+
+    canvas.on('mouse:down', (e) => {
+      if (!e.target && currentPath) {
+        // Clicked on empty canvas area
+        exitEditMode();
+        return;
+      }
+
+      if (selectionState !== 'editing') return;
+
+      if (currentMode === 'add-point') {
+        addPointToPath(e);
+      } else if (currentMode === 'delete-point' && e.target?.data?.type === 'point') {
+        const point = anchorPoints.find(p => p.fabricPoint === e.target);
+        if (point) deletePoint(point);
+      }
+    });
+
+    // Initialize with default path
+    importSVG(complexPath);
+  </script>
+</body>
+
+</html>
