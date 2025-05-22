@@ -17,6 +17,7 @@ import {
   rejectMessages,
   OBJ_TYPE,
 } from '@/consts';
+import SVGEditor from './ui/svgPathEdit';
 
 const {
   MOUSE_DOWN,
@@ -247,6 +248,8 @@ class ImageEditor {
       this._attachColorPickerInputBoxEvents();
     }
     fabric.enableGLFiltering = false;
+
+    this.svgEditor = new SVGEditor(this);
   }
 
   _attachColorPickerInputBoxEvents() {
@@ -758,6 +761,10 @@ class ImageEditor {
 
       return value;
     });
+  }
+
+  importSVG(svgContent) {
+    this.svgEditor.importSVG(svgContent);
   }
 
   /**

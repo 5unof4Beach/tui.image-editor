@@ -13,6 +13,10 @@ export default ({
                     ${locale.localize('Load')}
                     <input type="file" class="tui-image-editor-load-btn" />
                 </div>
+                <div style="${loadButtonStyle}">
+                    ${locale.localize('Import SVG')}
+                    <input type="file" class="tui-image-editor-import-btn" accept=".svg" />
+                </div>
                 <button class="tui-image-editor-download-btn" style="${downloadButtonStyle}">
                     ${locale.localize('Download')}
                 </button>

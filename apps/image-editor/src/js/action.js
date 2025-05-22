@@ -146,6 +146,24 @@ export default {
             })
             ['catch']((message) => Promise.reject(message));
         },
+        loadSvg: (file) => {
+          if (!isSupportFileApi()) {
+            alert('This browser does not support file-api');
+          }
+
+          if (!file) {
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const svgContent = e.target.result;
+            this.importSVG(svgContent);
+          };
+          reader.readAsText(file);
+
+          this.ui.initializeImgUrl = URL.createObjectURL(file);
+        },
         download: () => {
           const dataURL = this.toDataURL();
           let imageName = this.getImageName();

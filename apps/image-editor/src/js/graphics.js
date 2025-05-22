@@ -998,6 +998,7 @@ class Graphics {
     this._canvas = new fabric.Canvas(canvasElement, {
       containerClass: 'tui-image-editor-canvas-container',
       enableRetinaScaling: false,
+      preserveObjectStacking: true,
     });
   }
 
@@ -1204,6 +1205,8 @@ class Graphics {
    */
   _onObjectMoved(fEvent) {
     const obj = fEvent.target;
+    if (obj?.data?.type && (obj.data.type === 'point' || obj.data.type === 'control')) return;
+
     const { left: currentLeft, top: currentTop } = obj;
 
     // Calculate movement delta

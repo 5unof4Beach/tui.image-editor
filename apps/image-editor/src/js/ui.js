@@ -378,6 +378,7 @@ class Ui {
     this._buttonElements = {
       download: this._selectedElement.querySelectorAll('.tui-image-editor-download-btn'),
       load: this._selectedElement.querySelectorAll('.tui-image-editor-load-btn'),
+      importSvg: this._selectedElement.querySelectorAll('.tui-image-editor-import-btn'),
     };
 
     this._addHelpMenus();
@@ -596,6 +597,24 @@ class Ui {
     });
   }
 
+  _addLoadSvgEvent() {
+    this.eventHandler.loadSvg = (event) => this._actions.main.loadSvg(event.target.files[0]);
+
+    forEach(this._buttonElements.importSvg, (element) => {
+      element.addEventListener('change', this.eventHandler.loadSvg);
+    });
+  }
+
+  /**
+   * Remove load event
+   * @private
+   */
+  _removeLoadSvgEvent() {
+    forEach(this._buttonElements.importSvg, (element) => {
+      element.removeEventListener('change', this.eventHandler.loadSvg);
+    });
+  }
+
   /**
    * Add menu event
    * @param {string} menuName - menu name
@@ -678,6 +697,7 @@ class Ui {
     this._removeHelpActionEvent();
     this._removeDownloadEvent();
     this._removeLoadEvent();
+    this._removeLoadSvgEvent();
     this._removeMainMenuEvent();
     this._historyMenu.removeEvent();
   }
@@ -707,6 +727,7 @@ class Ui {
     }
 
     this._addLoadEvent();
+    this._addLoadSvgEvent();
 
     const gridVisual = document.createElement('div');
 

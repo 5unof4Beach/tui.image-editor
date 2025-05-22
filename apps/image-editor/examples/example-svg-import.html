@@ -444,38 +444,38 @@
       canvas.requestRenderAll();
     }
 
-    function smoothPath() {
-      if (!currentPath || anchorPoints.length < 3) return;
+    // function smoothPath() {
+    //   if (!currentPath || anchorPoints.length < 3) return;
 
-      for (let i = 1; i < anchorPoints.length - 1; i++) {
-        const prev = anchorPoints[i - 1];
-        const curr = anchorPoints[i];
-        const next = anchorPoints[i + 1];
+    //   for (let i = 1; i < anchorPoints.length - 1; i++) {
+    //     const prev = anchorPoints[i - 1];
+    //     const curr = anchorPoints[i];
+    //     const next = anchorPoints[i + 1];
 
-        // Calculate control points for smooth curve
-        const dx = next.x - prev.x;
-        const dy = next.y - prev.y;
-        const len = Math.sqrt(dx * dx + dy * dy);
-        const factor = len / 3;
+    //     // Calculate control points for smooth curve
+    //     const dx = next.x - prev.x;
+    //     const dy = next.y - prev.y;
+    //     const len = Math.sqrt(dx * dx + dy * dy);
+    //     const factor = len / 3;
 
-        const angle = Math.atan2(dy, dx);
+    //     const angle = Math.atan2(dy, dx);
 
-        if (!curr.controlPoint1) {
-          curr.setControlPoints(
-            curr.x - Math.cos(angle) * factor,
-            curr.y - Math.sin(angle) * factor,
-            curr.x + Math.cos(angle) * factor,
-            curr.y + Math.sin(angle) * factor
-          );
-          canvas.add(curr.controlPoint1.fabricPoint);
-          canvas.add(curr.controlPoint2.fabricPoint);
-          controlPoints.push(curr.controlPoint1);
-          controlPoints.push(curr.controlPoint2);
-        }
-      }
+    //     if (!curr.controlPoint1) {
+    //       curr.setControlPoints(
+    //         curr.x - Math.cos(angle) * factor,
+    //         curr.y - Math.sin(angle) * factor,
+    //         curr.x + Math.cos(angle) * factor,
+    //         curr.y + Math.sin(angle) * factor
+    //       );
+    //       canvas.add(curr.controlPoint1.fabricPoint);
+    //       canvas.add(curr.controlPoint2.fabricPoint);
+    //       controlPoints.push(curr.controlPoint1);
+    //       controlPoints.push(curr.controlPoint2);
+    //     }
+    //   }
 
-      updatePathFromPoints();
-    }
+    //   updatePathFromPoints();
+    // }
 
     // Mode handlers
     function setMode(mode) {
@@ -500,29 +500,29 @@
     }
 
     function addPointToPath(e) {
-      if (currentMode !== 'add-point' || !currentPath) return;
+      // if (currentMode !== 'add-point' || !currentPath) return;
 
-      const pointer = canvas.getPointer(e);
-      const point = new PathPoint(pointer.x, pointer.y);
-      anchorPoints.push(point);
-      canvas.add(point.fabricPoint);
+      // const pointer = canvas.getPointer(e);
+      // const point = new PathPoint(pointer.x, pointer.y);
+      // anchorPoints.push(point);
+      // canvas.add(point.fabricPoint);
 
-      updatePathFromPoints();
+      // updatePathFromPoints();
     }
 
     function deletePoint(point) {
-      if (currentMode !== 'delete-point') return;
+      // if (currentMode !== 'delete-point') return;
 
-      const index = anchorPoints.indexOf(point);
-      if (index > -1) {
-        canvas.remove(point.fabricPoint);
-        if (point.controlPoint1) {
-          canvas.remove(point.controlPoint1.fabricPoint);
-          canvas.remove(point.controlPoint2.fabricPoint);
-        }
-        anchorPoints.splice(index, 1);
-        updatePathFromPoints();
-      }
+      // const index = anchorPoints.indexOf(point);
+      // if (index > -1) {
+      //   canvas.remove(point.fabricPoint);
+      //   if (point.controlPoint1) {
+      //     canvas.remove(point.controlPoint1.fabricPoint);
+      //     canvas.remove(point.controlPoint2.fabricPoint);
+      //   }
+      //   anchorPoints.splice(index, 1);
+      //   updatePathFromPoints();
+      // }
     }
 
     // Import SVG function
