@@ -1,6 +1,7 @@
 import { fabric } from 'fabric';
 import { getSmallestPoint } from '../helper/svgPathEditorHelper';
 import PathPoint from '../component/pathPoint';
+import editIconPath from '../../svg/icon-a/ic-edit.svg';
 
 class SVGState {
   constructor() {
@@ -45,14 +46,18 @@ export class SVGEditor {
     this.imageEditor = imageEditor;
     this.canvas = imageEditor._graphics.getCanvas();
     this.state = new SVGState();
-    const editIcon =
-      "data:image/svg+xml,%3C%3Fxml version='1.0' encoding='utf-8'%3F%3E%3C!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'%3E%3Csvg version='1.1' id='Ebene_1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' x='0px' y='0px' width='595.275px' height='595.275px' viewBox='200 215 230 470' xml:space='preserve'%3E%3Ccircle style='fill:%23F44336;' cx='299.76' cy='439.067' r='218.516'/%3E%3Cg%3E%3Crect x='267.162' y='307.978' transform='matrix(0.7071 -0.7071 0.7071 0.7071 -222.6202 340.6915)' style='fill:white;' width='65.545' height='262.18'/%3E%3Crect x='266.988' y='308.153' transform='matrix(0.7071 0.7071 -0.7071 0.7071 398.3889 -83.3116)' style='fill:white;' width='65.544' height='262.179'/%3E%3C/g%3E%3C/svg%3E";
     this.editImg = document.createElement('img');
-    this.editImg.src = editIcon;
+    this.editImg.src = editIconPath;
+
+    this.canvas.on('mouse:down', (e) => {
+      if (!e.target && this.state.currentPath) {
+        this._exitEditMode();
+      }
+    });
   }
 
   _renderIcon(ctx, left, top, _styleOverride, fabricObject) {
-    const size = 24;
+    const size = 50;
     ctx.save();
     ctx.translate(left, top);
     ctx.rotate(fabric.util.degreesToRadians(fabricObject.angle));
@@ -61,24 +66,31 @@ export class SVGEditor {
   }
 
   importSVG(svgString) {
-    fabric.loadSVGFromString(svgString, (objects, _options) => {
+    fabric.loadSVGFromString(svgString, (objects) => {
       this.canvas.clear();
       objects.forEach((obj) => {
         if (obj instanceof fabric.Path) {
+          obj.set({
+            lockRotation: true,
+            controls: fabric.util.object.clone(fabric.Object.prototype.controls),
+          });
           this.canvas.add(obj);
           this.state.allPaths.push(obj);
           this._setupPathControls(obj);
         }
       });
+
       this.canvas.renderAll();
     });
   }
 
   _setupPathControls(pathObject) {
+    pathObject.controls = fabric.Object.prototype.controls;
     pathObject.controls.editControl = new fabric.Control({
-      x: 0.5,
-      y: -0.5,
-      offsetY: 16,
+      x: 0,
+      y: 0,
+      offsetY: 0,
+      offsetX: 0,
       cursorStyle: 'pointer',
       mouseUpHandler: this._editObject.bind(this),
       render: this._renderIcon.bind(this),
@@ -90,18 +102,15 @@ export class SVGEditor {
     const targetPath = transform.target;
     const { currentPath } = this.state;
 
+    if (!(targetPath instanceof fabric.Path)) {
+      return;
+    }
+
     if (currentPath && currentPath !== targetPath) {
       this._exitEditMode();
     }
     this.state.currentPath = targetPath;
     this.state.setSelectionState('editing');
-
-    this.state.currentPath.set({
-      selectable: false,
-      hasControls: false,
-      hasBorders: false,
-      evented: true,
-    });
 
     this.state.allPaths.forEach((path) => {
       if (path !== currentPath) {
@@ -129,6 +138,8 @@ export class SVGEditor {
         hasControls: true,
         hasBorders: true,
         evented: true,
+        lockMovementX: false,
+        lockMovementY: false,
       });
       this.state.currentPath = null;
     }
@@ -151,35 +162,67 @@ export class SVGEditor {
   }
 
   _showControlPoints() {
-    const { currentPath } = this.state;
+    const [zoom] = this.canvas.viewportTransform;
+    const { currentPath, anchorPoints, controlPoints } = this.state;
     const commands = currentPath.path;
     const pathLeft = currentPath.left || 0;
     const pathTop = currentPath.top || 0;
-    const scaleX = currentPath.scaleX || 1;
-    const scaleY = currentPath.scaleY || 1;
-    const { x: minX, y: minY } = getSmallestPoint(currentPath);
-    const { anchorPoints, controlPoints } = this.state;
+    const scaleX = zoom * (currentPath.scaleX || 1);
+    const scaleY = zoom * (currentPath.scaleY || 1);
+    const { x, y } = getSmallestPoint(currentPath);
+    const minX = x * scaleX;
+    const minY = y * scaleY;
+    // const angle = currentPath.angle || 0;
+
+    // const rotatePoint = (valX, valY) => {
+    //   const point = new fabric.Point(valX, valY);
+    //   const center = new fabric.Point(pathLeft, pathTop);
+    //   return fabric.util.rotatePoint(point, center, fabric.util.degreesToRadians(angle));
+    // };
+
+    currentPath.set({
+      selectable: false,
+      hasControls: false,
+      hasBorders: false,
+      evented: false,
+      lockMovementX: true,
+      lockMovementY: true,
+    });
 
     commands.forEach((cmd) => {
       switch (cmd[0]) {
         case 'M':
-        case 'L':
-          const left = cmd[1] * scaleX;
-          const top = cmd[2] * scaleY;
-          const point = new PathPoint(this, left - (minX - pathLeft), top - (minY - pathTop));
+        case 'L': {
+          const left = cmd[1] * scaleX - (minX - pathLeft);
+          const top = cmd[2] * scaleY - (minY - pathTop);
+          // const rotated = rotatePoint(left, top);
+          // const point = new PathPoint(this, rotated.x, rotated.y);
+          const point = new PathPoint(this, left, top);
           anchorPoints.push(point);
           point.fabricPoint.bringToFront();
           this.canvas.add(point.fabricPoint);
           break;
-        case 'C':
+        }
+        case 'C': {
           const lastPoint = anchorPoints[anchorPoints.length - 1];
           if (lastPoint) {
-            lastPoint.setControlPoints(
-              cmd[1] * scaleX - (minX - pathLeft),
-              cmd[2] * scaleY - (minY - pathTop),
-              cmd[3] * scaleX - (minX - pathLeft),
-              cmd[4] * scaleY - (minY - pathTop)
-            );
+            // const cp1 = rotatePoint(
+            //   cmd[1] * scaleX - (minX - pathLeft),
+            //   cmd[2] * scaleY - (minY - pathTop)
+            // );
+            // const cp2 = rotatePoint(
+            //   cmd[3] * scaleX - (minX - pathLeft),
+            //   cmd[4] * scaleY - (minY - pathTop)
+            // );
+            const cp1 = {
+              x: cmd[1] * scaleX - (minX - pathLeft),
+              y: cmd[2] * scaleY - (minY - pathTop),
+            };
+            const cp2 = {
+              x: cmd[3] * scaleX - (minX - pathLeft),
+              y: cmd[4] * scaleY - (minY - pathTop),
+            };
+            lastPoint.setControlPoints(cp1.x, cp1.y, cp2.x, cp2.y);
             this.canvas.add(lastPoint.controlPoint1.fabricPoint);
             this.canvas.add(lastPoint.controlPoint2.fabricPoint);
             lastPoint.controlPoint1.fabricPoint.bringToFront();
@@ -188,15 +231,20 @@ export class SVGEditor {
             controlPoints.push(lastPoint.controlPoint2);
           }
 
-          const endPoint = new PathPoint(
-            this,
-            cmd[5] * scaleX - (minX - pathLeft),
-            cmd[6] * scaleY - (minY - pathTop)
-          );
+          // const endRotated = rotatePoint(
+          //   cmd[5] * scaleX - (minX - pathLeft),
+          //   cmd[6] * scaleY - (minY - pathTop)
+          // );
+          const endRotated = {
+            x: cmd[5] * scaleX - (minX - pathLeft),
+            y: cmd[6] * scaleY - (minY - pathTop),
+          };
+          const endPoint = new PathPoint(this, endRotated.x, endRotated.y);
           anchorPoints.push(endPoint);
           this.canvas.add(endPoint.fabricPoint);
           endPoint.fabricPoint.bringToFront();
           break;
+        }
         default:
           break;
       }

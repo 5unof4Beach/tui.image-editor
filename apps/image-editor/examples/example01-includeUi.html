@@ -58,15 +58,15 @@
     var imageEditor = new tui.ImageEditor('#tui-image-editor-container', {
       includeUI: {
         loadImage: {
-          path: 'img/sampleImage2.png',
+          path: 'img/blob-scene-haikei.svg',
           name: 'SampleImage',
         },
         theme: blackTheme, // or whiteTheme
         initMenu: 'filter',
-        menuBarPosition: 'bottom',
+        menuBarPosition: 'left',
       },
-      cssMaxWidth: 700,
-      cssMaxHeight: 500,
+      // cssMaxWidth: 1920,
+      // cssMaxHeight: 1080,
       usageStatistics: false,
     });
     window.onresize = function () {

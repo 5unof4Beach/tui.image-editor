@@ -84,14 +84,44 @@ export default {
 
     return extend(
       {
-        initLoadImage: (imagePath, imageName) =>
-          this.loadImageFromURL(imagePath, imageName).then((sizeValue) => {
+        // initLoadImage: (imagePath, imageName) =>
+        //   this.loadImageFromURL(imagePath, imageName).then((sizeValue) => {
+        //     exitCropOnAction();
+        //     this.ui.initializeImgUrl = imagePath;
+        //     this.ui.resizeEditor({ imageSize: sizeValue });
+        //     this.clearUndoStack();
+        //     this._invoker.fire(eventNames.EXECUTE_COMMAND, historyNames.LOAD_IMAGE);
+        //   }),
+        initLoadImage: (imagePath, imageName) => {
+          if (imagePath.toLowerCase().endsWith('.svg')) {
+            return (
+              fetch(imagePath)
+                .then((response) => response.text())
+                .then((svgContent) => {
+                  this.loadImageFromURL(imagePath, imageName).then(() => {
+                    exitCropOnAction();
+                    this.ui.initializeImgUrl = imagePath;
+                    this.importSVG(svgContent);
+                    this.clearUndoStack();
+                    this._invoker.fire(eventNames.EXECUTE_COMMAND, historyNames.LOAD_IMAGE);
+                  });
+                })
+                // eslint-disable-next-line dot-notation
+                .catch((error) => {
+                  console.error('Error loading SVG:', error);
+                })
+            );
+          }
+
+          // Handle regular images
+          return this.loadImageFromURL(imagePath, imageName).then((sizeValue) => {
             exitCropOnAction();
             this.ui.initializeImgUrl = imagePath;
             this.ui.resizeEditor({ imageSize: sizeValue });
             this.clearUndoStack();
             this._invoker.fire(eventNames.EXECUTE_COMMAND, historyNames.LOAD_IMAGE);
-          }),
+          });
+        },
         undo: () => {
           if (!this.isEmptyUndoStack()) {
             exitCropOnAction();

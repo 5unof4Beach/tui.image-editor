@@ -294,7 +294,7 @@
 
     function editObject(_eventData, transform) {
       const targetPath = transform.target;
-      
+
       // If we're already editing a different path, exit its edit mode
       if (currentPath && currentPath !== targetPath) {
         exitEditMode();
@@ -302,7 +302,7 @@
 
       currentPath = targetPath;
       selectionState = 'editing';
-      
+
       // Update path appearance
       currentPath.set({
         selectable: false,
@@ -328,26 +328,38 @@
 
     function showControlPoints() {
       // Parse path commands and create control points
+      console.log({...currentPath})
       const center = canvas.getCenter();
       const commands = currentPath.path;
       const pathLeft = currentPath.left || 0;
       const pathTop = currentPath.top || 0;
       // const pathLeft = center.left;
       // const pathTop = center.top;
-      const scaleX = currentPath.scaleX || 1;
-      const scaleY = currentPath.scaleY || 1;
-      const { x: minX, y: minY } = getSmallestPoint();
+      const scaleX = currentPath.scaleX;
+      const scaleY = currentPath.scaleY;
+      const { x, y } = getSmallestPoint();
+      const minX = x * scaleX;
+      const minY = y * scaleY;
+      const angle = currentPath.angle || 0;
+
+      const rotatePoint = (x, y) => {
+        // Create point object
+        const point = new fabric.Point(x, y);
+        // Create center point for rotation
+        const center = new fabric.Point(pathLeft, pathTop);
+        // Use fabric's built-in rotation utility
+        return fabric.util.rotatePoint(point, center, fabric.util.degreesToRadians(angle));
+      };
+
 
       commands.forEach((cmd, i) => {
         switch (cmd[0]) {
           case 'M':
           case 'L':
-            const left = cmd[1] * scaleX;
-            const top = cmd[2] * scaleY;
-            const point = new PathPoint(
-              left - (minX - pathLeft),
-              top - (minY - pathTop)
-            );
+            const left = cmd[1] * scaleX - (minX - pathLeft);
+            const top = cmd[2] * scaleY - (minY - pathTop);
+            const rotated = rotatePoint(left, top);
+            const point = new PathPoint(rotated.x, rotated.y);
             anchorPoints.push(point);
             point.fabricPoint.bringToFront();
             canvas.add(point.fabricPoint);
@@ -355,10 +367,15 @@
           case 'C':
             const lastPoint = anchorPoints[anchorPoints.length - 1];
             if (lastPoint) {
-              lastPoint.setControlPoints(
-                cmd[1] * scaleX - (minX - pathLeft), cmd[2] * scaleY - (minY - pathTop),
-                cmd[3] * scaleX - (minX - pathLeft), cmd[4] * scaleY - (minY - pathTop)
+              const cp1 = rotatePoint(
+                cmd[1] * scaleX - (minX - pathLeft),
+                cmd[2] * scaleY - (minY - pathTop)
               );
+              const cp2 = rotatePoint(
+                cmd[3] * scaleX - (minX - pathLeft),
+                cmd[4] * scaleY - (minY - pathTop)
+              );
+              lastPoint.setControlPoints(cp1.x, cp1.y, cp2.x, cp2.y);
               canvas.add(lastPoint.controlPoint1.fabricPoint);
               canvas.add(lastPoint.controlPoint2.fabricPoint);
               lastPoint.controlPoint1.fabricPoint.bringToFront();
@@ -367,10 +384,11 @@
               controlPoints.push(lastPoint.controlPoint2);
             }
 
-            const endPoint = new PathPoint(
+            const endRotated = rotatePoint(
               cmd[5] * scaleX - (minX - pathLeft),
               cmd[6] * scaleY - (minY - pathTop)
             );
+            const endPoint = new PathPoint(endRotated.x, endRotated.y);
             anchorPoints.push(endPoint);
             canvas.add(endPoint.fabricPoint);
             endPoint.fabricPoint.bringToFront();
@@ -383,6 +401,7 @@
       currentPath._lastTop = pathTop;
       currentPath._lastScaleX = scaleX;
       currentPath._lastScaleY = scaleY;
+      currentPath._lastAngle = angle;
     }
 
     function hideControlPoints() {
@@ -427,10 +446,12 @@
       } else {
         // Create new path object
         const initialPath = new fabric.Path(pathData, {
-          fill: currentPath.fill,
+          ...currentPath,
           selectable: true,
           evented: false
         });
+
+        console
 
         // Remove old path and add new one
         if (currentPath) {
@@ -444,38 +465,38 @@
       canvas.requestRenderAll();
     }
 
-    // function smoothPath() {
-    //   if (!currentPath || anchorPoints.length < 3) return;
+    function smoothPath() {
+      if (!currentPath || anchorPoints.length < 3) return;
 
-    //   for (let i = 1; i < anchorPoints.length - 1; i++) {
-    //     const prev = anchorPoints[i - 1];
-    //     const curr = anchorPoints[i];
-    //     const next = anchorPoints[i + 1];
+      for (let i = 1; i < anchorPoints.length - 1; i++) {
+        const prev = anchorPoints[i - 1];
+        const curr = anchorPoints[i];
+        const next = anchorPoints[i + 1];
 
-    //     // Calculate control points for smooth curve
-    //     const dx = next.x - prev.x;
-    //     const dy = next.y - prev.y;
-    //     const len = Math.sqrt(dx * dx + dy * dy);
-    //     const factor = len / 3;
+        // Calculate control points for smooth curve
+        const dx = next.x - prev.x;
+        const dy = next.y - prev.y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const factor = len / 3;
 
-    //     const angle = Math.atan2(dy, dx);
+        const angle = Math.atan2(dy, dx);
 
-    //     if (!curr.controlPoint1) {
-    //       curr.setControlPoints(
-    //         curr.x - Math.cos(angle) * factor,
-    //         curr.y - Math.sin(angle) * factor,
-    //         curr.x + Math.cos(angle) * factor,
-    //         curr.y + Math.sin(angle) * factor
-    //       );
-    //       canvas.add(curr.controlPoint1.fabricPoint);
-    //       canvas.add(curr.controlPoint2.fabricPoint);
-    //       controlPoints.push(curr.controlPoint1);
-    //       controlPoints.push(curr.controlPoint2);
-    //     }
-    //   }
+        if (!curr.controlPoint1) {
+          curr.setControlPoints(
+            curr.x - Math.cos(angle) * factor,
+            curr.y - Math.sin(angle) * factor,
+            curr.x + Math.cos(angle) * factor,
+            curr.y + Math.sin(angle) * factor
+          );
+          canvas.add(curr.controlPoint1.fabricPoint);
+          canvas.add(curr.controlPoint2.fabricPoint);
+          controlPoints.push(curr.controlPoint1);
+          controlPoints.push(curr.controlPoint2);
+        }
+      }
 
-    //   updatePathFromPoints();
-    // }
+      updatePathFromPoints();
+    }
 
     // Mode handlers
     function setMode(mode) {
@@ -500,29 +521,29 @@
     }
 
     function addPointToPath(e) {
-      // if (currentMode !== 'add-point' || !currentPath) return;
+      if (currentMode !== 'add-point' || !currentPath) return;
 
-      // const pointer = canvas.getPointer(e);
-      // const point = new PathPoint(pointer.x, pointer.y);
-      // anchorPoints.push(point);
-      // canvas.add(point.fabricPoint);
+      const pointer = canvas.getPointer(e);
+      const point = new PathPoint(pointer.x, pointer.y);
+      anchorPoints.push(point);
+      canvas.add(point.fabricPoint);
 
-      // updatePathFromPoints();
+      updatePathFromPoints();
     }
 
     function deletePoint(point) {
-      // if (currentMode !== 'delete-point') return;
+      if (currentMode !== 'delete-point') return;
 
-      // const index = anchorPoints.indexOf(point);
-      // if (index > -1) {
-      //   canvas.remove(point.fabricPoint);
-      //   if (point.controlPoint1) {
-      //     canvas.remove(point.controlPoint1.fabricPoint);
-      //     canvas.remove(point.controlPoint2.fabricPoint);
-      //   }
-      //   anchorPoints.splice(index, 1);
-      //   updatePathFromPoints();
-      // }
+      const index = anchorPoints.indexOf(point);
+      if (index > -1) {
+        canvas.remove(point.fabricPoint);
+        if (point.controlPoint1) {
+          canvas.remove(point.controlPoint1.fabricPoint);
+          canvas.remove(point.controlPoint2.fabricPoint);
+        }
+        anchorPoints.splice(index, 1);
+        updatePathFromPoints();
+      }
     }
 
     // Import SVG function
@@ -541,7 +562,7 @@
             // Add to canvas
             canvas.add(obj);
             allPaths.push(obj);
-            
+
             // Add edit control to each path
             obj.controls.editControl = new fabric.Control({
               x: 0.5,
