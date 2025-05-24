@@ -377,6 +377,7 @@ class Ui {
     this._subMenuElement = selector('.tui-image-editor-submenu');
     this._buttonElements = {
       download: this._selectedElement.querySelectorAll('.tui-image-editor-download-btn'),
+      downloadSvg: this._selectedElement.querySelectorAll('.tui-image-editor-svg-download-btn'),
       load: this._selectedElement.querySelectorAll('.tui-image-editor-load-btn'),
       importSvg: this._selectedElement.querySelectorAll('.tui-image-editor-import-btn'),
     };
@@ -575,6 +576,19 @@ class Ui {
     });
   }
 
+  _addDownloadSvgEvent() {
+    this.eventHandler.downloadSvg = () => this._actions.main.downloadSvg();
+    forEach(this._buttonElements.downloadSvg, (element) => {
+      element.addEventListener('click', this.eventHandler.downloadSvg);
+    });
+  }
+
+  _removeDownloadSvgEvent() {
+    forEach(this._buttonElements.downloadSvg, (element) => {
+      element.removeEventListener('click', this.eventHandler.downloadSvg);
+    });
+  }
+
   /**
    * Add load event
    * @private
@@ -683,6 +697,7 @@ class Ui {
 
     this._addHelpActionEvent();
     this._addDownloadEvent();
+    this._addDownloadSvgEvent();
     this._addMenuEvent();
     this._initMenu();
     this._historyMenu.addEvent(this._actions.history);
@@ -696,6 +711,7 @@ class Ui {
   _removeUiEvent() {
     this._removeHelpActionEvent();
     this._removeDownloadEvent();
+    this._removeDownloadSvgEvent();
     this._removeLoadEvent();
     this._removeLoadSvgEvent();
     this._removeMainMenuEvent();

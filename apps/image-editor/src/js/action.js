@@ -211,6 +211,9 @@ export default {
             w.document.body.innerHTML = `<img src='${dataURL}'>`;
           }
         },
+        downloadSvg: () => {
+          this.downloadSVG('image.svg');
+        },
         history: (event) => {
           this.ui.toggleHistoryMenu(event);
         },

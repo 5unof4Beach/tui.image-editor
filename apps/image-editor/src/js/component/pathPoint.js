@@ -119,7 +119,6 @@ class PathPoint {
       // Create new path object
       const initialPath = new fabric.Path(pathData, {
         fill: currentPath.fill || 'white',
-        ...currentPath,
         selectable: true,
         evented: false,
       });

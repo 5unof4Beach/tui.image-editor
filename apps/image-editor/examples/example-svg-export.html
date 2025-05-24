@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Interactive SVG Path Points - Fabric.js</title>
+  <style>
+    .controls {
+      top: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      width: 400px;
+    }
+
+    #svg-input {
+      width: 100%;
+      height: 120px;
+      margin-bottom: 10px;
+      padding: 8px;
+      font-family: monospace;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .controls button {
+      margin: 5px;
+      padding: 8px 16px;
+      cursor: pointer;
+      background: #4A90E2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+
+    .controls button:hover {
+      background: #357ABD;
+    }
+
+    .mode-buttons button.active {
+      background: #2196f3;
+    }
+
+    #points-display {
+      margin-top: 15px;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    .instruction {
+      position: fixed;
+      top: 80px;
+      left: 20px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+
+<body>
+  <div style="display: flex;">
+    <canvas id="canvas" width="1000" height="800"></canvas>
+    <img id='i1' />
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script>
+    const urlMap = {
+      VT323:
+        'url(https://fonts.gstatic.com/s/vt323/v17/pxiKyp0ihIEF2isfFJXUdVNF.woff2)',
+      Pacifico:
+        'url(https://fonts.gstatic.com/s/pacifico/v22/FwZY7-Qmy14u9lezJ-6H6MmBp0u-.woff2)',
+      Lato100:
+        'url(https://fonts.gstatic.com/s/lato/v24/S6u8w4BMUTPHh30AXC-qNiXg7Q.woff2)',
+      Lato900:
+        'url(https://fonts.gstatic.com/s/lato/v24/S6u9w4BMUTPHh50XSwiPGQ3q5d0.woff2)',
+    };
+    const canvas = new fabric.Canvas('canvas', {
+      preserveObjectStacking: true
+    });
+    // correctly instantiate new Fontfaces
+    const fontVT323 = new FontFace('VT323', urlMap.VT323, {
+      style: 'normal',
+      weight: 'normal',
+    });
+    const fontPacifico = new FontFace('Pacifico', urlMap.Pacifico, {
+      style: 'normal',
+      weight: 'normal',
+    });
+
+    const Lato100 = new FontFace('Lato', urlMap.Lato100, {
+      style: 'normal',
+      weight: '100',
+    });
+
+    const Lato900 = new FontFace('Lato', urlMap.Lato900, {
+      style: 'normal',
+      weight: '900',
+    });
+    // wait for them to load
+    Promise.all([
+      fontVT323.load(),
+      fontPacifico.load(),
+      Lato100.load(),
+      Lato900.load(),
+    ]).then(() => {
+      // add the css to the document for those loaded fonts
+      document.fonts.add(fontPacifico);
+      document.fonts.add(fontVT323);
+      document.fonts.add(Lato100);
+      document.fonts.add(Lato900);
+      // create the textboxes
+      const pacifico = new fabric.Textbox('Correctly loaded Pacifico', {
+        left: 50,
+        top: 10,
+        width: 200,
+        fontSize: 60,
+        fontFamily: 'Pacifico',
+      });
+      const vt323 = new fabric.Textbox('Correctly loaded VT323', {
+        left: 350,
+        top: 10,
+        width: 200,
+        fontSize: 60,
+        fontFamily: 'VT323',
+      });
+      const lato100 = new fabric.Textbox('Correctly loaded lato100', {
+        left: 350,
+        top: 310,
+        width: 200,
+        fontSize: 60,
+        fontWeight: '100',
+        fontFamily: 'Lato',
+      });
+      const lato900 = new fabric.Textbox('Correctly loaded lato900', {
+        left: 50,
+        top: 310,
+        width: 200,
+        fontSize: 60,
+        fontWeight: '900',
+        fontFamily: 'Lato',
+      });
+
+      canvas.add(pacifico, vt323, lato100, lato900);
+
+      fabric.Canvas.prototype.toSVG = (function (originalFn) {
+        return function (...args) {
+          const svg = originalFn.call(this, ...args);
+
+          // Create font-face declarations
+          const fontFaces = `
+      @font-face {
+        font-family: 'VT323';
+        src: ${urlMap.VT323} format('woff2');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Pacifico';
+        src: ${urlMap.Pacifico} format('woff2');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Lato';
+        src: ${urlMap.Lato100} format('woff2');
+        font-weight: 100;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Lato';
+        src: ${urlMap.Lato900} format('woff2');
+        font-weight: 900;
+        font-style: normal;
+      }
+    `;
+
+          // Insert font-face declarations into SVG's style section
+          const svgTagMatch = svg.match(/<svg[^>]*>/);
+          if (svgTagMatch) {
+            const svgTag = svgTagMatch[0];
+            const svgTagIndex = svg.indexOf(svgTag);
+            const insertPosition = svgTagIndex + svgTag.length;
+
+            // Insert style tag immediately after the SVG tag
+            const res = svg.slice(0, insertPosition) +
+              `\n  <style type="text/css">${fontFaces}</style>` +
+              svg.slice(insertPosition);
+
+            return res;
+          }
+
+
+          return svg;
+        };
+      })(fabric.Canvas.prototype.toSVG);
+
+      let svgString = canvas.toSVG();
+      const blob = new Blob([svgString], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = url;
+      link.download = 'demo.svg';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      const container = document.querySelector("#i1").parentNode;
+      container.removeChild(document.querySelector("#i1"));
+      container.insertAdjacentHTML('beforeend', svgString);
+    });
+  </script>
+</body>
+
+</html>
