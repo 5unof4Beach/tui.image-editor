@@ -2,6 +2,7 @@ import extend from 'tui-code-snippet/object/extend';
 import Imagetracer from '@/helper/imagetracer';
 import { isSupportFileApi, base64ToBlob, toInteger, isEmptyCropzone, includes } from '@/util';
 import { eventNames, historyNames, drawingModes, drawingMenuNames, zoomModes } from '@/consts';
+import { fabric } from 'fabric';
 
 export default {
   /**
@@ -307,6 +308,13 @@ export default {
             color,
           });
         },
+        setFillColor: (color) => {
+          this.setFillColor(color);
+        },
+        setCanvasBackgroundColor: (color) => {
+          this._graphics.getCanvas().backgroundColor = color;
+          this._graphics.getCanvas().renderAll();
+        },
       },
       this._commonAction()
     );
@@ -350,6 +358,28 @@ export default {
           if (this.activeObjectId) {
             this.changeTextStyle(this.activeObjectId, styleObj, isSilent);
           }
+        },
+      },
+      {
+        disableAllSelectable: () => {
+          this._graphics.getCanvas().forEachObject((obj) => {
+            if (obj instanceof fabric.IText || obj instanceof fabric.Text) {
+              return;
+            }
+
+            obj.selectable = false;
+            obj.hoverCursor = 'crosshair';
+            obj.evented = false;
+          });
+        },
+      },
+      {
+        enableAllSelectable: () => {
+          this._graphics.getCanvas().forEachObject((obj) => {
+            obj.selectable = true;
+            obj.hoverCursor = 'move';
+            obj.evented = true;
+          });
         },
       },
       this._commonAction()

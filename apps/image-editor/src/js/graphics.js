@@ -1444,6 +1444,8 @@ class Graphics {
    */
   _onObjectSelected(fEvent) {
     const params = this.createObjectProperties(fEvent.selected[0]);
+    const [obj] = fEvent.selected;
+    if (obj?.data?.type && (obj.data.type === 'point' || obj.data.type === 'control')) return;
 
     this.fire(events.OBJECT_ACTIVATED, params);
   }

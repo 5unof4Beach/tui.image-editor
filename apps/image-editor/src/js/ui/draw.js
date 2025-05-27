@@ -30,6 +30,14 @@ class Draw extends Submenu {
         toggleDirection: this.toggleDirection,
         usageStatistics: this.usageStatistics,
       }),
+      drawFillColorPicker: new Colorpicker(this.selector('.tie-draw-fill'), {
+        toggleDirection: this.toggleDirection,
+        usageStatistics: this.usageStatistics,
+      }),
+      drawCanvasBackgroundColorPicker: new Colorpicker(this.selector('.tie-draw-canvas-bg'), {
+        toggleDirection: this.toggleDirection,
+        usageStatistics: this.usageStatistics,
+      }),
       drawRange: new Range(
         {
           slider: this.selector('.tie-draw-range'),
@@ -38,6 +46,9 @@ class Draw extends Submenu {
         defaultDrawRangeValues
       ),
     };
+    this.colorPickerControls.push(this._els.drawColorPicker);
+    this.colorPickerControls.push(this._els.drawFillColorPicker);
+    this.colorPickerControls.push(this._els.drawCanvasBackgroundColorPicker);
 
     this.type = null;
     this.color = this._els.drawColorPicker.color;
@@ -55,6 +66,8 @@ class Draw extends Submenu {
     this._removeEvent();
     this._els.drawColorPicker.destroy();
     this._els.drawRange.destroy();
+    this._els.drawFillColorPicker.destroy();
+    this._els.drawCanvasBackgroundColorPicker.destroy();
 
     assignmentForDestroy(this);
   }
@@ -71,6 +84,19 @@ class Draw extends Submenu {
     this._els.lineSelectButton.addEventListener('click', this.eventHandler.changeDrawType);
     this._els.drawColorPicker.on('change', this._changeDrawColor.bind(this));
     this._els.drawRange.on('change', this._changeDrawRange.bind(this));
+    this._els.drawFillColorPicker.on('change', this._changeFillColor.bind(this));
+
+    this._els.drawCanvasBackgroundColorPicker.on(
+      'change',
+      this._changeCanvasBackgroundColor.bind(this)
+    );
+
+    this._els.drawColorPicker.on('changeShow', this.colorPickerChangeShow.bind(this));
+    this._els.drawCanvasBackgroundColorPicker.on(
+      'changeShow',
+      this.colorPickerChangeShow.bind(this)
+    );
+    this._els.drawFillColorPicker.on('changeShow', this.colorPickerChangeShow.bind(this));
 
     this.colorPickerInputBox.addEventListener(
       eventNames.FOCUS,
@@ -89,6 +115,8 @@ class Draw extends Submenu {
   _removeEvent() {
     this._els.lineSelectButton.removeEventListener('click', this.eventHandler.changeDrawType);
     this._els.drawColorPicker.off();
+    this._els.drawFillColorPicker.off();
+    this._els.drawCanvasBackgroundColorPicker.off();
     this._els.drawRange.off();
 
     this.colorPickerInputBox.removeEventListener(
@@ -126,9 +154,9 @@ class Draw extends Submenu {
    * Executed when the menu starts.
    */
   changeStartMode() {
-    this.type = 'free';
-    this._els.lineSelectButton.classList.add('free');
-    this.setDrawMode();
+    // this.type = 'free';
+    // this._els.lineSelectButton.classList.add('free');
+    // this.setDrawMode();
   }
 
   /**
@@ -167,6 +195,14 @@ class Draw extends Submenu {
     } else {
       this.setDrawMode();
     }
+  }
+
+  _changeFillColor(color) {
+    this.actions.setFillColor(color);
+  }
+
+  _changeCanvasBackgroundColor(color) {
+    this.actions.setCanvasBackgroundColor(color);
   }
 
   /**

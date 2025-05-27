@@ -28,6 +28,12 @@ export default ({ locale, makeSvgIcon }) => `
             <div></div>
         </li>
         <li>
+            <div class="tie-draw-canvas-bg" title="${locale.localize('Canvas')}"></div>
+        </li>
+        <li>
+            <div class="tie-draw-fill" title="${locale.localize('Fill')}"></div>
+        </li>
+        <li>
             <div class="tie-draw-color" title="${locale.localize('Color')}"></div>
         </li>
         <li class="tui-image-editor-partition only-left-right">

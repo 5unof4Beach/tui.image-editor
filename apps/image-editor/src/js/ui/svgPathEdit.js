@@ -68,6 +68,7 @@ export class SVGEditor {
   importSVG(svgString) {
     fabric.loadSVGFromString(svgString, (objects) => {
       this.canvas.clear();
+      this.setCanvasSize(svgString);
       objects.forEach((obj) => {
         if (obj instanceof fabric.Path) {
           obj.set({
@@ -77,11 +78,29 @@ export class SVGEditor {
           this.canvas.add(obj);
           this.state.allPaths.push(obj);
           this._setupPathControls(obj);
+        } else if (obj instanceof fabric.Rect) {
+          this.canvas.backgroundColor = obj.fill ?? '';
+          this.imageEditor.setCanvasBackgroundColorPicker(obj.fill ?? '');
+        } else {
+          this.canvas.add(obj);
         }
       });
 
       this.canvas.renderAll();
     });
+  }
+
+  setCanvasSize(svgString) {
+    const viewBoxMatch = svgString.match(/viewBox=["']([^"']*)["']/i);
+
+    if (viewBoxMatch && viewBoxMatch[1]) {
+      const [width, height] = viewBoxMatch[1].split(/\s+/).map(Number).slice(2);
+
+      if (!isNaN(width) && !isNaN(height)) {
+        this.canvas.setWidth(width);
+        this.canvas.setHeight(height);
+      }
+    }
   }
 
   _setupPathControls(pathObject) {
@@ -115,10 +134,10 @@ export class SVGEditor {
     this.state.allPaths.forEach((path) => {
       if (path !== currentPath) {
         path.set({
-          selectable: true,
-          hasControls: true,
-          hasBorders: true,
-          evented: true,
+          selectable: false,
+          hasControls: false,
+          hasBorders: false,
+          evented: false,
         });
       }
     });
@@ -132,7 +151,6 @@ export class SVGEditor {
     this._hideControlPoints();
     this.state.setSelectionState('none');
     if (currentPath) {
-      // Restore current path controls
       currentPath.set({
         selectable: true,
         hasControls: true,
@@ -143,6 +161,17 @@ export class SVGEditor {
       });
       this.state.currentPath = null;
     }
+
+    this.state.allPaths.forEach((path) => {
+      path.set({
+        selectable: true,
+        hasControls: true,
+        hasBorders: true,
+        evented: true,
+        lockMovementX: false,
+        lockMovementY: false,
+      });
+    });
     this.canvas.requestRenderAll();
   }
 
@@ -249,6 +278,15 @@ export class SVGEditor {
           break;
       }
     });
+  }
+
+  setFillColor(color) {
+    const { currentPath } = this.state;
+
+    if (currentPath) {
+      currentPath.set({ fill: color });
+      this.canvas.requestRenderAll();
+    }
   }
 }
 

@@ -28,7 +28,7 @@ class Text extends Submenu {
       underline: false,
     };
     this.align = 'tie-text-align-left';
-    this.fontFamily = 'Noto Sans';
+    this.fontFamily = '';
     this.aggregatedFontFamilies = {};
     this.currTextId = null;
     this._els = {
@@ -58,9 +58,6 @@ class Text extends Submenu {
     });
 
     this.fontPicker.setOnChange(async (font) => {
-      this.aggregatedFontFamilies[this.currTextId] = font;
-      if (this.fontFamily === font.family) return;
-
       async function isFontLoaded(fontFamily) {
         try {
           const loadPromises = [
@@ -78,6 +75,9 @@ class Text extends Submenu {
           return false;
         }
       }
+
+      this.aggregatedFontFamilies[this.currTextId] = font;
+      if (this.fontFamily === font.family) return;
 
       await isFontLoaded(font.family).then((loaded) => {
         if (loaded) {
@@ -161,12 +161,16 @@ class Text extends Submenu {
    */
   changeStandbyMode() {
     this.actions.stopDrawingMode();
+    this.actions.enableAllSelectable();
   }
 
   /**
    * Executed when the menu starts.
    */
   changeStartMode() {
+    this.actions.stopDrawingMode();
+    this.actions.disableAllSelectable();
+
     this.actions.modeChange('text');
   }
 
@@ -343,34 +347,36 @@ class Text extends Submenu {
           const font = fontData[textId];
           if (font) {
             accumulator += `
-                      @font-face {
-                        font-family: '${font.family}';
-                        src: url('${font.files.regular}') format('woff2');
-                        font-weight: normal;
-                        font-style: normal;
-                      }
-                      ${
-                        font.files.italic
-                          ? `
-                      @font-face {
-                        font-family: '${font.family}';
-                        src: url('${font.files.italic}') format('woff2');
-                        font-weight: normal;
-                        font-style: italic;
-                      }`
-                          : ''
-                      }
-                      ${
-                        font.files['700']
-                          ? `
-                      @font-face {
-                        font-family: '${font.family}';
-                        src: url('${font.files['700']}) format('woff2');
-                        font-weight: bold;
-                        font-style: normal;
-                      }`
-                          : ''
-                      }`;
+                      <style type="text/css">
+                        @font-face {
+                          font-family: '${font.family}';
+                          src: url('${font.files.regular}') format('woff2');
+                          font-weight: normal;
+                          font-style: normal;
+                        }
+                        ${
+                          font.files.italic
+                            ? `
+                        @font-face {
+                          font-family: '${font.family}';
+                          src: url('${font.files.italic}') format('woff2');
+                          font-weight: normal;
+                          font-style: italic;
+                        }`
+                            : ''
+                        }
+                        ${
+                          font.files['700']
+                            ? `
+                        @font-face {
+                          font-family: '${font.family}';
+                          src: url('${font.files['700']}) format('woff2');
+                          font-weight: bold;
+                          font-style: normal;
+                        }
+                      </style>\n`
+                            : ''
+                        }`;
           }
 
           return accumulator;
@@ -386,10 +392,7 @@ class Text extends Submenu {
           const insertPosition = svgTagIndex + svgTag.length;
 
           // Insert style tag immediately after the SVG tag
-          const res = `${svg.slice(
-            0,
-            insertPosition
-          )}\n  <style type="text/css">${fontFaces}</style>${svg.slice(insertPosition)}`;
+          const res = `${svg.slice(0, insertPosition)}\n  ${fontFaces}${svg.slice(insertPosition)}`;
 
           return res;
         }

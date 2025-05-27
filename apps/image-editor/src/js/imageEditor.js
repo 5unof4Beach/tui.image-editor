@@ -204,6 +204,8 @@ class ImageEditor {
       cssMaxHeight: options.cssMaxHeight,
     });
 
+    this.svgEditor = new SVGEditor(this);
+
     /**
      * Event handler list
      * @type {Object}
@@ -248,8 +250,6 @@ class ImageEditor {
       this._attachColorPickerInputBoxEvents();
     }
     fabric.enableGLFiltering = false;
-
-    this.svgEditor = new SVGEditor(this);
   }
 
   _attachColorPickerInputBoxEvents() {
@@ -521,6 +521,7 @@ class ImageEditor {
      *     console.log(props.id);
      * });
      */
+    this.ui.draw._els.drawFillColorPicker._changeColorElement(props.fill || '#ffffff');
     this.fire(events.OBJECT_ACTIVATED, props);
   }
 
@@ -765,6 +766,7 @@ class ImageEditor {
 
   importSVG(svgContent) {
     this.svgEditor.importSVG(svgContent);
+    this.ui.activeMenuEvent();
   }
 
   /**
@@ -1801,13 +1803,13 @@ class ImageEditor {
    * @param {Object} [options] - SVG options (see toSVG options)
    * @returns {void}
    * @example
-   * imageEditor.downloadSVG('customName.svg');
    * imageEditor.downloadSVG('customName.svg', {
    *   suppressPreamble: true,
    *   viewBox: true
    * });
    */
   downloadSVG(fileName = 'image.svg', options = {}) {
+    this.svgEditor._exitEditMode();
     const svgString = this._graphics.toSVG(options);
     const blob = new Blob([svgString], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
@@ -1820,6 +1822,14 @@ class ImageEditor {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  }
+
+  setFillColor(color) {
+    this.svgEditor.setFillColor(color);
+  }
+
+  setCanvasBackgroundColorPicker(color) {
+    this.ui.draw._els.drawCanvasBackgroundColorPicker._changeColorElement(color);
   }
 }
 
