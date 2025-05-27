@@ -1402,12 +1402,11 @@ class Graphics {
    * @private
    */
   _onObjectRotated(fEvent) {
-    const obj = fEvent.target;
-    // Snap the angle if close to 0, 90, 180, or 270 degrees
-    const snappedAngle = this._snapAngle(obj.angle);
-    if (snappedAngle !== obj.angle) {
-      obj.set('angle', snappedAngle);
-    }
+    // const obj = fEvent.target;
+    // const snappedAngle = this._snapAngle(obj.angle);
+    // if (snappedAngle !== obj.angle) {
+    //   obj.set('angle', snappedAngle);
+    // }
 
     this._lazyFire(
       events.OBJECT_ROTATED,

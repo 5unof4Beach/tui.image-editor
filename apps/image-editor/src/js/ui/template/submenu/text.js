@@ -6,6 +6,12 @@
  */
 export default ({ locale, makeSvgIcon }) => `
     <ul class="tui-image-editor-submenu-item">
+        <li class="tui-image-editor-newline">
+            <div id="font-picker"></div>
+        </li>
+        <li class="tui-image-editor-partition">
+            <div></div>
+        </li>
         <li class="tie-text-effect-button">
             <div class="tui-image-editor-button bold">
                 <div>
